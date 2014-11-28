@@ -1,9 +1,16 @@
 // Copyright (C) 2014 Sean Middleditch, all rights reserverd.
 
+#include "yardstick.h"
 #include "Profile.h"
-#include "ProfileFileSink.h"
 
 #if defined(ENABLE_PROFILER)
+
+#include <cstdio>
+#include <vector>
+#include <tuple>
+#include <algorithm>
+
+#include "ProfileFileSink.h"
 
 namespace
 {
@@ -16,7 +23,7 @@ namespace
 
 void detail::profile::IncrementCounter(uint16_t id, uint16_t loc, double amount)
 {
-	auto const time = SDL_GetPerformanceCounter();
+	auto const time = ys_read_clock_ticks();
 
 	for (auto sink : s_Sinks)
 		if (sink != nullptr)
@@ -25,7 +32,7 @@ void detail::profile::IncrementCounter(uint16_t id, uint16_t loc, double amount)
 
 void detail::profile::StartZone(uint16_t id, uint16_t loc)
 {
-	auto const start = SDL_GetPerformanceCounter();
+	auto const start = ys_read_clock_ticks();
 	auto const depth = static_cast<uint16_t>(s_Stack.size());
 
 	s_Stack.emplace_back(id, start);
@@ -37,7 +44,7 @@ void detail::profile::StartZone(uint16_t id, uint16_t loc)
 
 void detail::profile::StopZone()
 {
-	auto const end = SDL_GetPerformanceCounter();
+	auto const end = ys_read_clock_ticks();
 
 	auto const& entry = s_Stack.back();
 	auto const id = entry.first;
@@ -55,7 +62,6 @@ uint16_t detail::profile::RegisterLocation(const char* file, int line, char cons
 	auto const location = std::make_tuple(file, function, line);
 
 	size_t const index = std::find(begin(s_Locations), end(s_Locations), location) - begin(s_Locations);
-	SDL_assert(index <= std::numeric_limits<uint16_t>::max());
 	if (index < s_Locations.size())
 		return static_cast<uint16_t>(index);
 
@@ -74,7 +80,6 @@ uint16_t detail::profile::RegisterCounter(const char* name, EProfileUnits units)
 {
 	// this may be a duplicate; return the existing one if so
 	size_t const index = std::find_if(begin(s_Counters), end(s_Counters), [=](char const* str){ return std::strcmp(str, name) == 0; }) - begin(s_Counters);
-	SDL_assert(index <= std::numeric_limits<uint16_t>::max());
 	if (index < s_Counters.size())
 		return static_cast<uint16_t>(index);
 
@@ -93,7 +98,6 @@ uint16_t detail::profile::RegisterZone(const char* name)
 {
 	// this may be a duplicate; return the existing one if so
 	size_t const index = std::find_if(begin(s_Zones), end(s_Zones), [=](char const* str){ return std::strcmp(str, name) == 0; }) - begin(s_Zones);
-	SDL_assert(index <= std::numeric_limits<uint16_t>::max());
 	if (index < s_Zones.size())
 		return static_cast<uint16_t>(index);
 

@@ -1,11 +1,14 @@
 // Copyright (C) 2014 Sean Middleditch, all rights reserverd.
 
+#include "yardstick.h"
 #include "ProfileFileSink.h"
+
+#include <cstring>
 
 void ProfileFileSink::Flush()
 {
 	if (m_File != nullptr)
-		SDL_RWwrite(m_File, m_Buffer, m_Cursor, 1);
+		fwrite(m_Buffer, m_Cursor, 1, m_File);
 	m_Cursor = 0;
 }
 
@@ -59,10 +62,8 @@ void ProfileFileSink::Write16(uint16_t value)
 
 bool ProfileFileSink::Open(char const* fileName)
 {
-	SDL_Log("Writing profile data to `%s`", fileName);
-
 	if (m_File == nullptr)
-		m_File = SDL_RWFromFile(fileName, "wb");
+		m_File = fopen(fileName, "wb");
 
 	if (m_File == nullptr)
 		return false;
@@ -72,26 +73,25 @@ bool ProfileFileSink::Open(char const* fileName)
 
 	if (m_Buffer == nullptr)
 	{
-		SDL_RWclose(m_File);
+		fclose(m_File);
+		m_File = nullptr;
 		return false;
 	}
 
 	// simple enough header
 	WriteBuffer("PROF0101\n", 8);
-	Write64(SDL_GetPerformanceCounter());
-	WriteFloat64(1.0 / SDL_GetPerformanceFrequency());
+	Write64(ys_read_clock_ticks());
+	WriteFloat64(1.0 / ys_read_clock_frequency());
 
 	return true;
 }
 
 void ProfileFileSink::Close()
 {
-	SDL_Log("Closing profile data");
-
 	Flush();
 
 	if (m_File != nullptr)
-		SDL_RWclose(m_File);
+		fclose(m_File);
 	m_File = nullptr;
 
 	delete[] m_Buffer;
@@ -147,5 +147,5 @@ void ProfileFileSink::WriteZoneEnd(uint16_t id, uint64_t start, uint64_t ticks, 
 void ProfileFileSink::Tick()
 {
 	Write8(7); // tick header
-	Write64(SDL_GetPerformanceCounter());
+	Write64(ys_read_clock_ticks());
 }

@@ -6,6 +6,8 @@
 
 #if defined(ENABLE_PROFILER)
 
+#include <cstdint>
+
 class IProfileSink;
 
 enum class EProfileUnits : uint8_t

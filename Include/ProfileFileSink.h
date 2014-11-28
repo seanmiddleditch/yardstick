@@ -4,13 +4,13 @@
 
 #include "IProfileSink.h"
 
-#include <SDL_rwops.h>
+#include <cstdio>
 
 class ProfileFileSink final : public IProfileSink
 {
 	static size_t const kBufferSize = 32 * 1024;
 
-	SDL_RWops* m_File = nullptr;
+	FILE* m_File = nullptr;
 	char* m_Buffer = nullptr;
 	size_t m_Cursor = 0;
 	size_t m_Capacity = 0;
