@@ -1,6 +1,7 @@
 // Copyright (C) 2014 Sean Middleditch, all rights reserverd.
 
 #include "yardstick.h"
+#include "ys_private.h"
 #include "Profile.h"
 
 #if defined(ENABLE_PROFILER)
@@ -23,7 +24,7 @@ namespace
 
 void detail::profile::IncrementCounter(uint16_t id, uint16_t loc, double amount)
 {
-	auto const time = ys_read_clock_ticks();
+	auto const time = _ys_read_clock_ticks();
 
 	for (auto sink : s_Sinks)
 		if (sink != nullptr)
@@ -32,7 +33,7 @@ void detail::profile::IncrementCounter(uint16_t id, uint16_t loc, double amount)
 
 void detail::profile::StartZone(uint16_t id, uint16_t loc)
 {
-	auto const start = ys_read_clock_ticks();
+	auto const start = _ys_read_clock_ticks();
 	auto const depth = static_cast<uint16_t>(s_Stack.size());
 
 	s_Stack.emplace_back(id, start);
@@ -44,7 +45,7 @@ void detail::profile::StartZone(uint16_t id, uint16_t loc)
 
 void detail::profile::StopZone()
 {
-	auto const end = ys_read_clock_ticks();
+	auto const end = _ys_read_clock_ticks();
 
 	auto const& entry = s_Stack.back();
 	auto const id = entry.first;
@@ -119,12 +120,7 @@ void detail::profile::Tick()
 			sink->Tick();
 }
 
-bool detail::profile::Initialize()
-{
-	return true;
-}
-
-void detail::profile::Shutdown()
+void YS_API ys_shutdown()
 {
 	s_Counters.clear();
 	s_Zones.clear();

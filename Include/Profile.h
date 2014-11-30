@@ -2,6 +2,8 @@
 
 #pragma once
 
+#include "yardstick.h"
+
 #define ENABLE_PROFILER 1
 
 #if defined(ENABLE_PROFILER)
@@ -21,22 +23,19 @@ namespace detail
 {
 	namespace profile
 	{
-		bool Initialize();
-		void Shutdown();
+		YS_API void YS_CALL AddSink(IProfileSink* sink);
+		YS_API void YS_CALL RemoveSink(IProfileSink* sink);
 
-		void AddSink(IProfileSink* sink);
-		void RemoveSink(IProfileSink* sink);
+		YS_API uint16_t YS_CALL RegisterLocation(char const* file, int line, char const* function);
 
-		uint16_t RegisterLocation(char const* file, int line, char const* function);
+		YS_API uint16_t YS_CALL RegisterZone(const char* message);
+		YS_API void YS_CALL StartZone(uint16_t id, uint16_t loc);
+		YS_API void YS_CALL StopZone();
 
-		uint16_t RegisterZone(const char* message);
-		void StartZone(uint16_t id, uint16_t loc);
-		void StopZone();
+		YS_API uint16_t YS_CALL RegisterCounter(const char* name, EProfileUnits units);
+		YS_API void YS_CALL IncrementCounter(uint16_t id, uint16_t loc, double count);
 
-		uint16_t RegisterCounter(const char* name, EProfileUnits units);
-		void IncrementCounter(uint16_t id, uint16_t loc, double count);
-
-		void Tick();
+		YS_API void YS_CALL Tick();
 
 		class Scope final
 		{

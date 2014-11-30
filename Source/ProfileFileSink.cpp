@@ -1,6 +1,7 @@
 // Copyright (C) 2014 Sean Middleditch, all rights reserverd.
 
 #include "yardstick.h"
+#include "ys_private.h"
 #include "ProfileFileSink.h"
 
 #include <cstring>
@@ -80,8 +81,8 @@ bool ProfileFileSink::Open(char const* fileName)
 
 	// simple enough header
 	WriteBuffer("PROF0101\n", 8);
-	Write64(ys_read_clock_ticks());
-	WriteFloat64(1.0 / ys_read_clock_frequency());
+	Write64(_ys_read_clock_ticks());
+	WriteFloat64(1.0 / _ys_read_clock_frequency());
 
 	return true;
 }
@@ -107,7 +108,7 @@ void ProfileFileSink::CreateLocationId(uint16_t id, char const* file, int line, 
 {
 	Write8(1); // new location header
 	Write16(id);
-	Write16(line);
+	Write16((uint16_t)line);
 	WriteString(file);
 	WriteString(function);
 }
@@ -147,5 +148,5 @@ void ProfileFileSink::WriteZoneEnd(uint16_t id, uint64_t start, uint64_t ticks, 
 void ProfileFileSink::Tick()
 {
 	Write8(7); // tick header
-	Write64(ys_read_clock_ticks());
+	Write64(_ys_read_clock_ticks());
 }
