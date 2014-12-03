@@ -66,27 +66,27 @@
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
-    <OutDir>$(SolutionDir)..\Build\</OutDir>
+    <OutDir>$(SolutionDir)..\Lib\$(PlatformName)\</OutDir>
     <IntDir>$(SolutionDir)..\Build\$(Configuration)-$(Platform)-$(TargetName)\</IntDir>
-    <TargetName>yardstick32</TargetName>
+    <TargetName>yardstickd</TargetName>
     <LinkIncremental>false</LinkIncremental>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <IntDir>$(SolutionDir)..\Build\$(Configuration)-$(Platform)-$(TargetName)\</IntDir>
-    <TargetName>yardstick64</TargetName>
-    <OutDir>$(SolutionDir)..\Build\</OutDir>
+    <TargetName>yardstickd</TargetName>
+    <OutDir>$(SolutionDir)..\Lib\$(PlatformName)\</OutDir>
     <LinkIncremental>false</LinkIncremental>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
-    <OutDir>$(SolutionDir)..\Lib\</OutDir>
+    <OutDir>$(SolutionDir)..\Lib\$(PlatformName)\</OutDir>
     <IntDir>$(SolutionDir)..\Build\$(Configuration)-$(Platform)-$(TargetName)\</IntDir>
-    <TargetName>yardstick32</TargetName>
+    <TargetName>yardstick</TargetName>
     <LinkIncremental>false</LinkIncremental>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <IntDir>$(SolutionDir)..\Build\$(Configuration)-$(Platform)-$(TargetName)\</IntDir>
-    <TargetName>yardstick64</TargetName>
-    <OutDir>$(SolutionDir)..\Lib\</OutDir>
+    <TargetName>yardstick</TargetName>
+    <OutDir>$(SolutionDir)..\Lib\$(PlatformName)\</OutDir>
     <LinkIncremental>false</LinkIncremental>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
@@ -98,7 +98,7 @@
       <ExceptionHandling>false</ExceptionHandling>
       <EnableEnhancedInstructionSet>StreamingSIMDExtensions2</EnableEnhancedInstructionSet>
       <DisableSpecificWarnings>4100</DisableSpecificWarnings>
-      <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS;_HAS_EXCEPTIONS=0;YARDSTICK_EXPORT;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS;_HAS_EXCEPTIONS=0;_ITERATOR_DEBUG_LEVEL=0;YARDSTICK_EXPORT;%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
     <Link>
       <GenerateDebugInformation>true</GenerateDebugInformation>
@@ -112,7 +112,7 @@
       <AdditionalIncludeDirectories>$(SolutionDir)..\Include\</AdditionalIncludeDirectories>
       <ExceptionHandling>false</ExceptionHandling>
       <DisableSpecificWarnings>4100</DisableSpecificWarnings>
-      <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS;_HAS_EXCEPTIONS=0;YARDSTICK_EXPORT;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS;_HAS_EXCEPTIONS=0;_ITERATOR_DEBUG_LEVEL=0;YARDSTICK_EXPORT;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <MinimalRebuild>false</MinimalRebuild>
     </ClCompile>
     <Link>
@@ -130,7 +130,7 @@
       <ExceptionHandling>false</ExceptionHandling>
       <EnableEnhancedInstructionSet>StreamingSIMDExtensions2</EnableEnhancedInstructionSet>
       <DisableSpecificWarnings>4100</DisableSpecificWarnings>
-      <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS;_HAS_EXCEPTIONS=0;YARDSTICK_EXPORT;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS;_HAS_EXCEPTIONS=0;_ITERATOR_DEBUG_LEVEL=0;YARDSTICK_EXPORT;%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
     <Link>
       <GenerateDebugInformation>true</GenerateDebugInformation>
@@ -148,7 +148,7 @@
       <AdditionalIncludeDirectories>$(SolutionDir)..\Include\</AdditionalIncludeDirectories>
       <ExceptionHandling>false</ExceptionHandling>
       <DisableSpecificWarnings>4100</DisableSpecificWarnings>
-      <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS;_HAS_EXCEPTIONS=0;YARDSTICK_EXPORT;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS;_HAS_EXCEPTIONS=0;_ITERATOR_DEBUG_LEVEL=0;YARDSTICK_EXPORT;%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
     <Link>
       <GenerateDebugInformation>true</GenerateDebugInformation>
@@ -157,18 +157,12 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="..\Source\Profile.cpp" />
-    <ClCompile Include="..\Source\ProfileFileSink.cpp" />
-    <ClCompile Include="..\Source\ys_alloc.c" />
-    <ClCompile Include="..\Source\ys_clock.c" />
-    <ClCompile Include="..\Source\ys_core.c" />
+    <ClCompile Include="..\Source\yardstick.cpp" />
+    <ClCompile Include="..\Source\filesink.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="..\Include\IProfileSink.h" />
-    <ClInclude Include="..\Include\Profile.h" />
-    <ClInclude Include="..\Include\ProfileFileSink.h" />
     <ClInclude Include="..\Include\yardstick.h" />
-    <ClInclude Include="..\Source\ys_private.h" />
+    <ClInclude Include="..\Include\yardstick.hpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
