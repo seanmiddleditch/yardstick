@@ -8,7 +8,7 @@
 #include <tuple>
 #include <algorithm>
 
-// we need this on Windows, and since there's tricks to including it minimally (not yet applied), just do it here
+// we need this on Windows for the default clock
 #if defined(_WIN32)
 #	define WIN32_LEAN_AND_MEAN
 #	include <windows.h>
@@ -19,6 +19,14 @@ namespace
 	/// Definition of a location.
 	/// \internal
 	using Location = std::tuple<char const*, char const*, int>;
+
+	/// Entry for the zone stack.
+	/// \internal
+	using Zone = std::pair<ys_id_t, ys_clock_t>;
+
+	/// A registered event sink.
+	/// \internal
+	using EventSink = std::pair<void*, ys_event_cb>;
 
 	/// Default realloc() wrapper.
 	/// \internal
@@ -32,16 +40,6 @@ namespace
 	/// \internal
 	ys_clock_t YS_CALL DefaultReadClockFrequency();
 
-	void YS_CALL DefaultSinkStart(void* userData, ys_clock_t clockNow, ys_clock_t clockFrequency) {}
-	void YS_CALL DefaultSinkStop(void* userData, ys_clock_t clockNow) {}
-	void YS_CALL DefaultSinkAddLocation(void* userData, uint16_t locatonId, char const* fileName, int line, char const* functionName) {}
-	void YS_CALL DefaultSinkAddCounter(void* userData, uint16_t counterId, char const* counterName) {}
-	void YS_CALL DefaultSinkAddZone(void* userData, uint16_t zoneId, char const* zoneName) {}
-	void YS_CALL DefaultSinkIncrementCounter(void* userData, uint16_t counterId, uint16_t locationId, uint64_t clockNow, double value) {}
-	void YS_CALL DefaultSinkEnterZone(void* userData, uint16_t zoneId, uint16_t locationId, ys_clock_t clockNow, uint16_t depth) {}
-	void YS_CALL DefaultSinkExitZone(void* userData, uint16_t zoneId, ys_clock_t clockStart, uint64_t clockElapsed, uint16_t depth) {}
-	void YS_CALL DefaultSinkTick(void* userData, ys_clock_t clockNow) {}
-
 	/// Allocator using the main context.
 	/// \internal
 	template <typename T>
@@ -51,31 +49,6 @@ namespace
 
 		T* allocate(std::size_t bytes);
 		void deallocate(T* block, std::size_t);
-	};
-
-
-	/// Sink wrapper for C++ interfaces.
-	class SinkWrapper final : public ys::ISink
-	{
-		void* m_UserData = nullptr;
-		ys_sink_t m_Sink;
-
-	public:
-		SinkWrapper(void* userData, ys_sink_t const& sink);
-		SinkWrapper(SinkWrapper const& src);
-		SinkWrapper& operator=(SinkWrapper const& src);
-
-		void const* GetUserData() const;
-
-		void Start(ys_clock_t clockNow, ys_clock_t clockFrequency) override;
-		void Stop(ys_clock_t clockNow) override;
-		void AddLocation(uint16_t locatonId, char const* fileName, int line, char const* functionName) override;
-		void AddCounter(uint16_t counterId, char const* counterName) override;
-		void AddZone(uint16_t zoneId, char const* zoneName) override;
-		void IncrementCounter(uint16_t counterId, uint16_t locationId, uint64_t clockNow, double value) override;
-		void EnterZone(uint16_t zoneId, uint16_t locationId, ys_clock_t clockNow, uint16_t depth) override;
-		void ExitZone(uint16_t zoneId, ys_clock_t clockStart, uint64_t clockElapsed, uint16_t depth) override;
-		void Tick(ys_clock_t clockNow) override;
 	};
 
 	/// An active context.
@@ -89,9 +62,8 @@ namespace
 		std::vector<Location, YsAllocator<Location>> locations;
 		std::vector<char const*, YsAllocator<char const*>> counters;
 		std::vector<char const*, YsAllocator<char const*>> zones;
-		std::vector<std::pair<ys_id_t, ys_clock_t>, YsAllocator<std::pair<ys_id_t, ys_clock_t>>> zoneStack;
-		std::vector<ys::ISink*, YsAllocator<ys::ISink*>> sinks;
-		std::vector<SinkWrapper, YsAllocator<SinkWrapper>> sinkWrappers;
+		std::vector<Zone, YsAllocator<Zone>> zoneStack;
+		std::vector<EventSink, YsAllocator<EventSink>> sinks;
 	};
 
 	/// The currently active context;
@@ -138,31 +110,6 @@ namespace
 	{
 		gContext->Alloc(block, 0U);
 	}
-
-	SinkWrapper::SinkWrapper(void* userData, ys_sink_t const& sink) : m_UserData(userData), m_Sink(sink) {}
-
-	SinkWrapper::SinkWrapper(SinkWrapper const& src) : m_UserData(src.m_UserData), m_Sink(src.m_Sink) {}
-
-	SinkWrapper& SinkWrapper::operator=(SinkWrapper const& src)
-	{
-		if (this != &src)
-		{
-			m_UserData = src.m_UserData;
-			m_Sink = src.m_Sink;
-		}
-		return *this;
-	}
-
-	void const* SinkWrapper::GetUserData() const { return m_UserData; }
-	void SinkWrapper::Start(ys_clock_t clockNow, ys_clock_t clockFrequency) { return m_Sink.start(m_UserData, clockNow, clockFrequency); }
-	void SinkWrapper::Stop(ys_clock_t clockNow) { return m_Sink.stop(m_UserData, clockNow); }
-	void SinkWrapper::AddLocation(uint16_t locatonId, char const* fileName, int line, char const* functionName) { return m_Sink.add_location(m_UserData, locatonId, fileName, line, functionName); }
-	void SinkWrapper::AddCounter(uint16_t counterId, char const* counterName) { return m_Sink.add_counter(m_UserData, counterId, counterName); }
-	void SinkWrapper::AddZone(uint16_t zoneId, char const* zoneName) { return m_Sink.add_zone(m_UserData, zoneId, zoneName); }
-	void SinkWrapper::IncrementCounter(uint16_t counterId, uint16_t locationId, uint64_t clockNow, double value) { return m_Sink.increment_counter(m_UserData, counterId, locationId, clockNow, value); }
-	void SinkWrapper::EnterZone(uint16_t zoneId, uint16_t locationId, ys_clock_t clockNow, uint16_t depth) { return m_Sink.enter_zone(m_UserData, zoneId, locationId, clockNow, depth); }
-	void SinkWrapper::ExitZone(uint16_t zoneId, ys_clock_t clockStart, uint64_t clockElapsed, uint16_t depth) { return m_Sink.exit_zone(m_UserData, zoneId, clockStart, clockElapsed, depth); }
-	void SinkWrapper::Tick(ys_clock_t clockNow) { return m_Sink.tick(m_UserData, clockNow); }
 }
 
 extern "C" {
@@ -214,14 +161,12 @@ void YS_API _ys_shutdown()
 	ctx->zones.clear();
 	ctx->zoneStack.clear();
 	ctx->sinks.clear();
-	ctx->sinkWrappers.clear();
 
 	ctx->locations.shrink_to_fit();
 	ctx->counters.shrink_to_fit();
 	ctx->zones.shrink_to_fit();
 	ctx->zoneStack.shrink_to_fit();
 	ctx->sinks.shrink_to_fit();
-	ctx->sinkWrappers.shrink_to_fit();
 
 	// release the context
 	gContext->~Context();
@@ -243,10 +188,17 @@ YS_API ys_id_t YS_CALL _ys_add_location(char const* fileName, int line, char con
 	gContext->locations.push_back(location);
 	ys_id_t const id = static_cast<ys_id_t>(index);
 
-	// tell all the sinks about the new counter
-	for (auto sink : gContext->sinks)
-		if (sink != nullptr)
-			sink->AddLocation(id, fileName, line, functionName);
+	// construct the event
+	ys_event_t ev;
+	ev.add_location.type = YS_EV_ADD_LOCATION;
+	ev.add_location.locationId = id;
+	ev.add_location.fileName = fileName;
+	ev.add_location.lineNumber = line;
+	ev.add_location.functionName = functionName;
+
+	// tell all the sinks about the new location
+	for (auto const& sink : gContext->sinks)
+		sink.second(sink.first, &ev);
 
 	return id;
 }
@@ -259,13 +211,19 @@ YS_API ys_id_t YS_CALL _ys_add_counter(const char* counterName)
 		return static_cast<ys_id_t>(index);
 
 	gContext->counters.push_back(counterName);
-	ys_id_t const id = static_cast<ys_id_t>(index);
+	auto const id = static_cast<ys_id_t>(index);
+
+	// construct the event
+	ys_event_t ev;
+	ev.add_counter.type = YS_EV_ADD_COUNTER;
+	ev.add_counter.counterId = id;
+	ev.add_counter.counterName = counterName;
 
 	// tell all the sinks about the new counter
 	for (auto sink : gContext->sinks)
-		sink->AddCounter(id, counterName);
+		sink.second(sink.first, &ev);
 
-	return id;
+	return ev.add_counter.counterId;
 }
 
 YS_API ys_id_t YS_CALL _ys_add_zone(const char* zoneName)
@@ -278,31 +236,46 @@ YS_API ys_id_t YS_CALL _ys_add_zone(const char* zoneName)
 	gContext->zones.push_back(zoneName);
 	ys_id_t const id = static_cast<ys_id_t>(index);
 
-	// tell all the sinks about the new counter
+	// construct the event
+	ys_event_t ev;
+	ev.add_zone.type = YS_EV_ADD_ZONE;
+	ev.add_zone.zoneId = id;
+	ev.add_zone.zoneName = zoneName;
+
+	// tell all the sinks about the new zone
 	for (auto sink : gContext->sinks)
-		sink->AddZone(id, zoneName);
+		sink.second(sink.first, &ev);
 
 	return id;
 }
 
 YS_API void YS_CALL _ys_increment_counter(ys_id_t counterId, ys_id_t locationId, double amount)
 {
-	auto const now = gContext->ReadClockTicks();
+	ys_event_t ev;
+	ev.increment_counter.clockNow = gContext->ReadClockTicks();
+	ev.increment_counter.type = YS_EV_INCREMENT_COUNTER;
+	ev.increment_counter.counterId = counterId;
+	ev.increment_counter.locationId = locationId;
+	ev.increment_counter.amount = amount;
 
 	for (auto sink : gContext->sinks)
-		if (sink != nullptr)
-			sink->IncrementCounter(counterId, locationId, now, amount);
+		sink.second(sink.first, &ev);
 }
 
 YS_API void YS_CALL _ys_enter_zone(ys_id_t zoneId, ys_id_t locationId)
 {
-	auto const now = gContext->ReadClockTicks();
-	auto const depth = static_cast<ys_id_t>(gContext->zoneStack.size());
+	ys_event_t ev;
+	ev.enter_zone.clockNow = gContext->ReadClockTicks();
+	ev.enter_zone.type = YS_EV_ENTER_ZONE;
+	ev.enter_zone.zoneId = zoneId;
+	ev.enter_zone.locationId = locationId;
+	ev.enter_zone.depth = static_cast<ys_id_t>(gContext->zoneStack.size());
 
-	gContext->zoneStack.emplace_back(zoneId, now);
+	// record the zone for handling the resulting exit zone
+	gContext->zoneStack.emplace_back(zoneId, ev.enter_zone.clockNow);
 
 	for (auto sink : gContext->sinks)
-		sink->EnterZone(zoneId, locationId, now, depth);
+		sink.second(sink.first, &ev);
 }
 
 YS_API void YS_CALL _ys_exit_zone()
@@ -310,105 +283,107 @@ YS_API void YS_CALL _ys_exit_zone()
 	auto const now = gContext->ReadClockTicks();
 
 	auto const& entry = gContext->zoneStack.back();
-	auto const zoneId = entry.first;
-	auto const start = entry.second;
-	auto const elapsed = now - start;
 
+	ys_event_t ev;
+	ev.exit_zone.type = YS_EV_EXIT_ZONE;
+	ev.exit_zone.zoneId = entry.first;
+	ev.exit_zone.clockStart = entry.second;
+	ev.exit_zone.clockElapsed = now - entry.second;
+
+	// pop off the corresponding enter zone
 	gContext->zoneStack.pop_back();
-	auto const depth = static_cast<uint16_t>(gContext->zoneStack.size());
+	ev.exit_zone.depth = static_cast<uint16_t>(gContext->zoneStack.size());
 
 	for (auto sink : gContext->sinks)
-		sink->ExitZone(zoneId, start, elapsed, depth);
+		sink.second(sink.first, &ev);
 }
 
 YS_API void YS_CALL _ys_tick()
 {
-	auto const now = gContext->ReadClockTicks();
+	ys_event_t ev;
+	ev.tick.clockNow = gContext->ReadClockTicks();
+	ev.tick.type = YS_EV_TICK;
 
 	for (auto sink : gContext->sinks)
-		sink->Tick(now);
+		sink.second(sink.first, &ev);
 }
 
-YS_API ys_error_t YS_CALL ys_add_sink(void* userData, ys_sink_t const* sink, size_t size)
+YS_API ys_error_t YS_CALL _ys_add_sink(void* userData, ys_event_cb callback)
 {
-	if (sink == nullptr)
+	if (callback == nullptr)
 		return YS_INVALID_PARAMETER;
 
-	if (size != sizeof(ys_sink_t))
-		return YS_INVALID_PARAMETER;
+	gContext->sinks.emplace_back(userData, callback);
 
-	// initialize any missing sink functions to do-nothing callbacks; avoids branches at runtime
-	// handle incomplete sink structures for users who compiled aginst old versions of the library
-	ys_sink_t tmp = YS_DEFAULT_SINK;
-	std::memcpy(&tmp, sink, size);
+	auto const now = gContext->ReadClockTicks();
+	auto const freq = gContext->ReadClockFrequency();
 
-	if (tmp.start == nullptr)
-		tmp.start = DefaultSinkStart;
-	if (tmp.stop == nullptr)
-		tmp.stop = DefaultSinkStop;
-	if (tmp.add_location == nullptr)
-		tmp.add_location = DefaultSinkAddLocation;
-	if (tmp.add_counter == nullptr)
-		tmp.add_counter = DefaultSinkAddCounter;
-	if (tmp.add_zone == nullptr)
-		tmp.add_zone = DefaultSinkAddZone;
-	if (tmp.increment_counter == nullptr)
-		tmp.increment_counter = DefaultSinkIncrementCounter;
-	if (tmp.enter_zone == nullptr)
-		tmp.enter_zone = DefaultSinkEnterZone;
-	if (tmp.exit_zone == nullptr)
-		tmp.exit_zone = DefaultSinkExitZone;
-	if (tmp.tick == nullptr)
-		tmp.tick = DefaultSinkTick;
+	// start the sink
+	ys_event_t ev;
+	ev.start.type = YS_EV_START;
+	ev.start.clockNow = now;
+	ev.start.clockFrequency = freq;
 
-	// register the wrapper
-	gContext->sinkWrappers.emplace_back(SinkWrapper(userData, tmp));
+	callback(userData, &ev);
 
-	return YS_OK;
-}
+	// register existing state
 
-YS_API void YS_CALL ys_remove_sink(void const* userData)
-{
-	// find the sink to remove it
-	auto it = std::find_if(begin(gContext->sinkWrappers), end(gContext->sinkWrappers), [=](SinkWrapper const& sink){ return sink.GetUserData() == userData; });
-	if (it == end(gContext->sinkWrappers))
-		return;
+	ev.type = YS_EV_ADD_LOCATION;
+	for (auto const& location : gContext->locations)
+	{
+		ev.add_location.locationId = static_cast<uint16_t>(&location - gContext->locations.data());
+		ev.add_location.fileName = std::get<0>(location);
+		ev.add_location.functionName = std::get<1>(location);
+		ev.add_location.lineNumber = std::get<2>(location);
+		callback(userData, &ev);
+	}
 
-	SinkWrapper tmp = *it;
-	gContext->sinkWrappers.erase(it);
-
-	tmp.Stop(gContext->ReadClockTicks());
-}
-
-} // extern "C"
-
-YS_API ys_error_t YS_CALL ys::AddSink(ISink* sink)
-{
-	if (sink == nullptr)
-		return YS_INVALID_PARAMETER;
-
-	gContext->sinks.push_back(sink);
-	
-	// tell the sink about existing counters and zones
+	ev.type = YS_EV_ADD_COUNTER;
 	for (auto const& counter : gContext->counters)
-		sink->AddCounter(static_cast<uint16_t>(&counter - gContext->counters.data()), counter);
+	{
+		ev.add_counter.counterId = static_cast<uint16_t>(&counter - gContext->counters.data());
+		ev.add_counter.counterName = counter;
+		callback(userData, &ev);
+	}
+
+	ev.type = YS_EV_ADD_ZONE;
 	for (auto const& zone : gContext->zones)
-		sink->AddCounter(static_cast<uint16_t>(&zone - gContext->zones.data()), zone);
+	{
+		ev.add_zone.zoneId = static_cast<uint16_t>(&zone - gContext->zones.data());
+		ev.add_zone.zoneName = zone;
+		callback(userData, &ev);
+	}
+
+	ev.type = YS_EV_ENTER_ZONE;
+	for (auto const& zone : gContext->zoneStack)
+	{
+		ev.enter_zone.zoneId = zone.first;
+		ev.enter_zone.locationId = 0; // FIXME
+		ev.enter_zone.clockNow = zone.second;
+		ev.enter_zone.depth = static_cast<uint8_t>(&zone - gContext->zoneStack.data());
+		callback(userData, &ev);
+	}
 
 	return YS_OK;
 }
 
-YS_API void YS_CALL ys::RemoveSink(ISink const* sink)
+YS_API void YS_CALL _ys_remove_sink(void* userData, ys_event_cb callback)
 {
-	if (sink == nullptr)
-		return;
+	auto const sink = std::make_pair(userData, callback);
 
+	// find the sink to remove it
 	auto it = std::find(begin(gContext->sinks), end(gContext->sinks), sink);
 	if (it == end(gContext->sinks))
 		return;
 
-	ISink* tmp = *it;
 	gContext->sinks.erase(it);
 
-	tmp->Stop(gContext->ReadClockTicks());
+	// stop the sink
+	ys_event_t ev;
+	ev.stop.type = YS_EV_STOP;
+	ev.stop.clockNow = gContext->ReadClockTicks();
+
+	callback(userData, &ev);
 }
+
+} // extern "C"

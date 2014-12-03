@@ -55,15 +55,39 @@ typedef ys_clock_t(YS_CALL *ys_read_clock_frequency_cb)(void);
  */
 typedef void*(YS_CALL *ys_alloc_cb)(void* block, size_t bytes);
 
-typedef void(YS_CALL *ys_sink_start_cb)(void* userData, ys_clock_t clockNow, ys_clock_t clockFrequency);
-typedef void(YS_CALL *ys_sink_stop_cb)(void* userData, ys_clock_t clockNow);
-typedef void(YS_CALL *ys_sink_add_location_cb)(void* userData, ys_id_t locationId, char const* fileName, int lineNumber, char const* functionName);
-typedef void(YS_CALL *ys_sink_add_counter_cb)(void* userData, ys_id_t counterId, char const* counterName);
-typedef void(YS_CALL *ys_sink_add_zone_cb)(void* userData, ys_id_t zoneId, char const* counterName);
-typedef void(YS_CALL *ys_sink_increment_counter_cb)(void* userData, ys_id_t counterId, ys_id_t locationId, ys_clock_t clockNow, double value);
-typedef void(YS_CALL *ys_sink_enter_zone_cb)(void* userData, ys_id_t zoneId, ys_id_t locationId, ys_clock_t clockNow, uint16_t depth);
-typedef void(YS_CALL *ys_sink_exit_zone_cb)(void* userData, ys_id_t zoneId, ys_clock_t clockStart, ys_clock_t clockElapsed, uint16_t depth);
-typedef void(YS_CALL *ys_sink_tick_cb)(void* userData, ys_clock_t clockNow);
+/** \brief List of possible event types from the event callback system. */
+typedef enum _ys_ev_type_t
+{
+	YS_EV_START,
+	YS_EV_STOP,
+	YS_EV_ADD_LOCATION,
+	YS_EV_ADD_COUNTER,
+	YS_EV_ADD_ZONE,
+	YS_EV_INCREMENT_COUNTER,
+	YS_EV_ENTER_ZONE,
+	YS_EV_EXIT_ZONE,
+	YS_EV_TICK,
+} ys_ev_type_t;
+
+typedef union _ys_event_t
+{
+	ys_ev_type_t type;
+	struct { ys_ev_type_t type; ys_clock_t clockNow; ys_clock_t clockFrequency; } start;
+	struct { ys_ev_type_t type; ys_clock_t clockNow; } stop;
+	struct { ys_ev_type_t type; ys_id_t locationId; char const* fileName; int lineNumber; char const* functionName; } add_location;
+	struct { ys_ev_type_t type; ys_id_t counterId; char const* counterName; } add_counter;
+	struct { ys_ev_type_t type; ys_id_t zoneId; char const* zoneName; } add_zone;
+	struct { ys_ev_type_t type; ys_id_t counterId; ys_id_t locationId; ys_clock_t clockNow; double amount; } increment_counter;
+	struct { ys_ev_type_t type; ys_id_t zoneId; ys_id_t locationId; ys_clock_t clockNow; uint16_t depth; } enter_zone;
+	struct { ys_ev_type_t type; ys_id_t zoneId; ys_clock_t clockStart; ys_clock_t clockElapsed; uint16_t depth; } exit_zone;
+	struct { ys_ev_type_t type; ys_clock_t clockNow; } tick;
+} ys_event_t;
+
+/** \brief Callback that receives events when they are triggered.
+ *  \param userData User-provided pointer registered with the callback.
+ *  \param ev The event data.
+ */
+typedef void(YS_CALL *ys_event_cb)(void* userData, ys_event_t const* ev);
 
 /** \brief Error return codes.
  */
@@ -104,25 +128,6 @@ typedef struct _ys_configuration_t
  */
 #define YS_DEFAULT_CONFIGURATION {0}
 
-/** \brief Functional interface for Yardstick sinks.
- */
-typedef struct _ys_sink_t
-{
-	ys_sink_start_cb start;
-	ys_sink_stop_cb stop;
-	ys_sink_add_location_cb add_location;
-	ys_sink_add_counter_cb add_counter;
-	ys_sink_add_zone_cb add_zone;
-	ys_sink_increment_counter_cb increment_counter;
-	ys_sink_enter_zone_cb enter_zone;
-	ys_sink_exit_zone_cb exit_zone;
-	ys_sink_tick_cb tick;
-} ys_sink_t;
-
-/** \brief Default initialization for a Yardstick sink.
- */
-#define YS_DEFAULT_SINK {0}
-
 #if YS_ENABLED
 	/** \brief Initializes the Yardstick library.
 	 *  Must be called before any other Yardstick function.
@@ -138,17 +143,17 @@ typedef struct _ys_sink_t
 	YS_API void YS_CALL _ys_shutdown(void);
 
 	/** \brief Registers a new sink.
-	 *  \param userData A user-defined pointer that will be passed to sink callbacks (must not be NULL, and must be unique).
-	 *  \param sink The sink description table that will be copied (must not be NULL).
-	 *  \param size The size of the sink table passed in.
+	 *  \param userData A user-defined pointer that will be passed to sink callbacks.
+	 *  \param callback The callback handed events.
 	 *  \return YS_OK on success, or another value on error.
 	 */
-	YS_API ys_error_t YS_CALL ys_add_sink(void* userData, ys_sink_t const* sink, size_t size);
+	YS_API ys_error_t YS_CALL _ys_add_sink(void* userData, ys_event_cb callback);
 
 	/** \brief Removes a registerd sink.
-	 *  \param userData A user-defined pointer that will be used to identify the sink to remove.
+	 *  \param userData A user-defined pointer that will be passed to sink callbacks.
+	 *  \param callback The callback handed events.
 	 */
-	YS_API void YS_CALL ys_remove_sink(void const* userData);
+	YS_API void YS_CALL _ys_remove_sink(void* userData, ys_event_cb callback);
 
 	/** \brief Registers a location to be used for future calls.
 	 */
@@ -200,8 +205,8 @@ typedef struct _ys_sink_t
 
 #	define ysTick() (_ys_tick())
 
-#	define ysAddSink(sink) (_ys_add_sink())
-#	define ysRemoveSink(sink) (_ys_remove_sink())
+#	define ysAddSink(userData, callback) (_ys_add_sink((userData), (callback)))
+#	define ysRemoveSink(userData, callback) (_ys_remove_sink((userData), (callback)))
 #else /* YS_ENABLED */
 #	define ysInitialize(configPtr, configSize) (YS_OK)
 #	define ysShutdown() ((void)0)
@@ -213,8 +218,8 @@ typedef struct _ys_sink_t
 
 #	define ysTick() ((void)0)
 
-#	define ysAddSink(sink) (YS_OK)
-#	define ysRemoveSink(sink) ((void)0)
+#	define ysAddSink(userData, callback) (YS_OK)
+#	define ysRemoveSink(userData, callback) ((void)0)
 #endif /* YS_ENABLED */
 
 #ifdef __cplusplus
