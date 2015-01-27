@@ -1,7 +1,8 @@
 // Copyright (C) 2014 Sean Middleditch, all rights reserverd.
 
 #include "yardstick.h"
-#include "yardstick.hpp"
+
+#if !defined(NO_YS)
 
 #include <cstring>
 #include <vector>
@@ -14,32 +15,37 @@
 #	include <windows.h>
 #endif
 
-namespace
+using namespace _ys__detail;
+
+/// Definition of a location.
+/// \internal
+using Location = std::tuple<char const*, char const*, int>;
+
+/// Entry for the zone stack.
+/// \internal
+using Zone = std::pair<ysIdT, ysClockT>;
+
+/// A registered event sink.
+/// \internal
+using EventSink = std::pair<void*, ysISink*>;
+
+namespace defaults
 {
-	/// Definition of a location.
-	/// \internal
-	using Location = std::tuple<char const*, char const*, int>;
-
-	/// Entry for the zone stack.
-	/// \internal
-	using Zone = std::pair<ys_id_t, ys_clock_t>;
-
-	/// A registered event sink.
-	/// \internal
-	using EventSink = std::pair<void*, ys_event_cb>;
-
 	/// Default realloc() wrapper.
 	/// \internal
-	void* YS_CALL DefaultAllocator(void* block, size_t bytes);
+	static void* YS_CALL Allocator(void* block, std::size_t bytes);
 
 	/// Default clock tick reader.
 	/// \internal
-	ys_clock_t YS_CALL DefaultReadClockTicks();
+	static ysClockT YS_CALL ReadClock();
 
 	/// Default clock frequency reader.
 	/// \internal
-	ys_clock_t YS_CALL DefaultReadClockFrequency();
+	static ysClockT YS_CALL ReadFrequency();
+}
 
+namespace
+{
 	/// Allocator using the main context.
 	/// \internal
 	template <typename T>
@@ -55,101 +61,92 @@ namespace
 	/// \internal
 	struct Context final
 	{
-		ys_alloc_cb Alloc = DefaultAllocator;
-		ys_read_clock_ticks_cb ReadClockTicks = DefaultReadClockTicks;
-		ys_read_clock_frequency_cb ReadClockFrequency = DefaultReadClockFrequency;
+		ysAllocatorCB Alloc = defaults::Allocator;
+		ysReadTicksCB ReadClockTicks = defaults::ReadClock;
+		ysReadFrequencyCB ReadClockFrequency = defaults::ReadFrequency;
 
 		std::vector<Location, YsAllocator<Location>> locations;
 		std::vector<char const*, YsAllocator<char const*>> counters;
 		std::vector<char const*, YsAllocator<char const*>> zones;
 		std::vector<Zone, YsAllocator<Zone>> zoneStack;
-		std::vector<EventSink, YsAllocator<EventSink>> sinks;
+		std::vector<ysISink*, YsAllocator<ysISink*>> sinks;
 	};
-
-	/// The currently active context;
-	Context* gContext = nullptr;
 }
 
-namespace
+/// The currently active context;
+/// \internal
+static Context* gContext = nullptr;
+
+void* YS_CALL defaults::Allocator(void* block, size_t bytes)
 {
-	void* YS_CALL DefaultAllocator(void* block, size_t bytes)
-	{
-		return realloc(block, bytes);
-	}
-
-	ys_clock_t DefaultReadClockTicks()
-	{
-#if defined(_WIN32)
-		LARGE_INTEGER tmp;
-		QueryPerformanceCounter(&tmp);
-		return tmp.QuadPart;
-#else
-#	error "Platform unsupported"
-#endif
-	}
-
-	ys_clock_t DefaultReadClockFrequency()
-	{
-#if defined(_WIN32)
-		LARGE_INTEGER tmp;
-		QueryPerformanceFrequency(&tmp);
-		return tmp.QuadPart;
-#else
-#	error "Platform unsupported"
-#endif
-	}
-
-	template <typename T>
-	T* YsAllocator<T>::allocate(std::size_t count)
-	{
-		return static_cast<T*>(gContext->Alloc(nullptr, count * sizeof(T)));
-	}
-
-	template <typename T>
-	void YsAllocator<T>::deallocate(T* block, std::size_t)
-	{
-		gContext->Alloc(block, 0U);
-	}
+	return realloc(block, bytes);
 }
 
-extern "C" {
+ysClockT defaults::ReadClock()
+{
+#if defined(_WIN32)
+	LARGE_INTEGER tmp;
+	QueryPerformanceCounter(&tmp);
+	return tmp.QuadPart;
+#else
+#	err "Platform unsupported"
+#endif
+}
 
-ys_error_t YS_API _ys_initialize(ys_configuration_t const* config, size_t size)
+ysClockT defaults::ReadFrequency()
+{
+#if defined(_WIN32)
+	LARGE_INTEGER tmp;
+	QueryPerformanceFrequency(&tmp);
+	return tmp.QuadPart;
+#else
+#	err "Platform unsupported"
+#endif
+}
+
+template <typename T>
+T* YsAllocator<T>::allocate(std::size_t count)
+{
+	return static_cast<T*>(gContext->Alloc(nullptr, count * sizeof(T)));
+}
+
+template <typename T>
+void YsAllocator<T>::deallocate(T* block, std::size_t)
+{
+	gContext->Alloc(block, 0U);
+}
+
+ysError YS_API ysInitialize(ysAllocatorCB allocator, ysReadTicksCB readClock, ysReadFrequencyCB readFrequency)
 {
 	// only allow initializing once per process
 	if (gContext != nullptr)
-		return YS_ONCE_ONLY;
+		return ysError::Duplicate;
 
 	// if the user supplied a configuration of function pointers, validate it
-	if (config != nullptr && size != sizeof(ys_configuration_t))
-		return YS_INVALID_PARAMETER;
-
-	// handle under-sized configs from older versions
-	ys_configuration_t tmp = YS_DEFAULT_CONFIGURATION;
-	std::memcpy(&tmp, config, size);
+	if (allocator == nullptr)
+		return ysError::InvalidParameter;
 
 	// determine which allocator to use
-	ys_alloc_cb allocator = tmp.alloc != nullptr ? tmp.alloc : DefaultAllocator;
+	if (allocator == nullptr)
+		allocator = defaults::Allocator;
 
 	// allocate and initialize the current context
 	auto ctx = new (allocator(nullptr, sizeof(Context))) Context();
 	if (ctx == nullptr)
-		return YS_RESOURCES_EXHAUSTED;
+		return ysError::ResourcesExhausted;
 
 	// initialize the context with the user's configuration, if any
 	ctx->Alloc = allocator;
-	if (tmp.read_clock_ticks != nullptr)
-		ctx->ReadClockTicks = tmp.read_clock_ticks;
-	if (tmp.read_clock_frequency != nullptr)
-		ctx->ReadClockFrequency = tmp.read_clock_frequency;
+	ctx->ReadClockTicks = readClock != nullptr ? readClock : defaults::ReadClock;
+	ctx->ReadClockFrequency = readFrequency != nullptr ? readFrequency : defaults::ReadFrequency;
 
 	// install the context
 	gContext = ctx;
 
-	return YS_OK;
+	return ysError::Success;
 }
 
-void YS_API _ys_shutdown()
+void YS_API ysShutdown()
 {
 	// check the context to ensure it's valid
 	auto ctx = gContext;
@@ -177,213 +174,195 @@ void YS_API _ys_shutdown()
 	std::memset(&gContext, 0xDD, sizeof(gContext));
 }
 
-YS_API ys_id_t YS_CALL _ys_add_location(char const* fileName, int line, char const* functionName)
+YS_API ysIdT YS_CALL _ys__detail::_addLocation(char const* fileName, int line, char const* functionName)
 {
+	// if we have no context, we can't record this location
+	if (gContext == nullptr)
+		return -1;
+
 	auto const location = std::make_tuple(fileName, functionName, line);
 
 	size_t const index = std::find(begin(gContext->locations), end(gContext->locations), location) - begin(gContext->locations);
 	if (index < gContext->locations.size())
-		return static_cast<ys_id_t>(index);
+		return static_cast<ysIdT>(index);
 
 	gContext->locations.push_back(location);
-	ys_id_t const id = static_cast<ys_id_t>(index);
-
-	// construct the event
-	ys_event_t ev;
-	ev.add_location.type = YS_EV_ADD_LOCATION;
-	ev.add_location.locationId = id;
-	ev.add_location.fileName = fileName;
-	ev.add_location.lineNumber = line;
-	ev.add_location.functionName = functionName;
+	ysIdT const id = static_cast<ysIdT>(index);
 
 	// tell all the sinks about the new location
-	for (auto const& sink : gContext->sinks)
-		sink.second(sink.first, &ev);
+	for (auto sink : gContext->sinks)
+		sink->AddLocation(id, fileName, line, functionName);
 
 	return id;
 }
 
-YS_API ys_id_t YS_CALL _ys_add_counter(const char* counterName)
+YS_API ysIdT YS_CALL _ys__detail::_addCounter(const char* counterName)
 {
+	// if we have no context, we can't record this location
+	if (gContext == nullptr)
+		return -1;
+
 	// this may be a duplicate; return the existing one if so
 	size_t const index = std::find_if(begin(gContext->counters), end(gContext->counters), [=](char const* str){ return std::strcmp(str, counterName) == 0; }) - begin(gContext->counters);
 	if (index < gContext->counters.size())
-		return static_cast<ys_id_t>(index);
+		return static_cast<ysIdT>(index);
 
 	gContext->counters.push_back(counterName);
-	auto const id = static_cast<ys_id_t>(index);
-
-	// construct the event
-	ys_event_t ev;
-	ev.add_counter.type = YS_EV_ADD_COUNTER;
-	ev.add_counter.counterId = id;
-	ev.add_counter.counterName = counterName;
+	auto const id = static_cast<ysIdT>(index);
 
 	// tell all the sinks about the new counter
 	for (auto sink : gContext->sinks)
-		sink.second(sink.first, &ev);
-
-	return ev.add_counter.counterId;
-}
-
-YS_API ys_id_t YS_CALL _ys_add_zone(const char* zoneName)
-{
-	// this may be a duplicate; return the existing one if so
-	size_t const index = std::find_if(begin(gContext->zones), end(gContext->zones), [=](char const* str){ return std::strcmp(str, zoneName) == 0; }) - begin(gContext->zones);
-	if (index < gContext->zones.size())
-		return static_cast<ys_id_t>(index);
-
-	gContext->zones.push_back(zoneName);
-	ys_id_t const id = static_cast<ys_id_t>(index);
-
-	// construct the event
-	ys_event_t ev;
-	ev.add_zone.type = YS_EV_ADD_ZONE;
-	ev.add_zone.zoneId = id;
-	ev.add_zone.zoneName = zoneName;
-
-	// tell all the sinks about the new zone
-	for (auto sink : gContext->sinks)
-		sink.second(sink.first, &ev);
+		sink->AddCounter(id, counterName);
 
 	return id;
 }
 
-YS_API void YS_CALL _ys_increment_counter(ys_id_t counterId, ys_id_t locationId, double amount)
+YS_API ysIdT YS_CALL _ys__detail::_addZone(const char* zoneName)
 {
-	ys_event_t ev;
-	ev.increment_counter.clockNow = gContext->ReadClockTicks();
-	ev.increment_counter.type = YS_EV_INCREMENT_COUNTER;
-	ev.increment_counter.counterId = counterId;
-	ev.increment_counter.locationId = locationId;
-	ev.increment_counter.amount = amount;
+	// if we have no context, we can't record this location
+	if (gContext == nullptr)
+		return -1;
 
+	// this may be a duplicate; return the existing one if so
+	size_t const index = std::find_if(begin(gContext->zones), end(gContext->zones), [=](char const* str){ return std::strcmp(str, zoneName) == 0; }) - begin(gContext->zones);
+	if (index < gContext->zones.size())
+		return static_cast<ysIdT>(index);
+
+	gContext->zones.push_back(zoneName);
+	ysIdT const id = static_cast<ysIdT>(index);
+
+	// tell all the sinks about the new zone
 	for (auto sink : gContext->sinks)
-		sink.second(sink.first, &ev);
+		sink->AddZone(id, zoneName);
+
+	return id;
 }
 
-YS_API void YS_CALL _ys_enter_zone(ys_id_t zoneId, ys_id_t locationId)
+YS_API void YS_CALL _ys__detail::_incrementCounter(ysIdT counterId, ysIdT locationId, double amount)
 {
-	ys_event_t ev;
-	ev.enter_zone.clockNow = gContext->ReadClockTicks();
-	ev.enter_zone.type = YS_EV_ENTER_ZONE;
-	ev.enter_zone.zoneId = zoneId;
-	ev.enter_zone.locationId = locationId;
-	ev.enter_zone.depth = static_cast<ys_id_t>(gContext->zoneStack.size());
+	// if we have no context, we can't record this counter
+	if (gContext == nullptr)
+		return;
 
-	// record the zone for handling the resulting exit zone
-	gContext->zoneStack.emplace_back(zoneId, ev.enter_zone.clockNow);
-
-	for (auto sink : gContext->sinks)
-		sink.second(sink.first, &ev);
-}
-
-YS_API void YS_CALL _ys_exit_zone()
-{
 	auto const now = gContext->ReadClockTicks();
 
-	auto const& entry = gContext->zoneStack.back();
+	for (auto sink : gContext->sinks)
+		sink->IncrementCounter(counterId, locationId, now, amount);
+}
 
-	ys_event_t ev;
-	ev.exit_zone.type = YS_EV_EXIT_ZONE;
-	ev.exit_zone.zoneId = entry.first;
-	ev.exit_zone.clockStart = entry.second;
-	ev.exit_zone.clockElapsed = now - entry.second;
+YS_API _ys__detail::_scopedZone::_scopedZone(ysIdT zoneId, ysIdT locationId)
+{
+	// if we have no context, we can't record this zone
+	if (gContext == nullptr)
+		return;
+
+	// if the id is invalid, record nothing
+	if (zoneId == -1 || locationId == -1)
+		return;
+
+	auto const now = gContext->ReadClockTicks();
+	auto const depth = static_cast<ysIdT>(gContext->zoneStack.size());
+
+	// record the zone for handling the resulting exit zone
+	gContext->zoneStack.emplace_back(zoneId, now);
+
+	for (auto sink : gContext->sinks)
+		sink->EnterZone(zoneId, locationId, now, depth);
+}
+
+YS_API _ys__detail::_scopedZone::~_scopedZone()
+{
+	// if we have no context, we can't record this zone exit
+	if (gContext == nullptr)
+		return;
+
+	// if the stack is empty, something is amiss
+	if (gContext->zoneStack.empty())
+		return;
+
+	auto const& entry = gContext->zoneStack.back();
+	auto const now = gContext->ReadClockTicks();
+	auto const zoneId = entry.first;
+	auto const start = entry.second;
+	auto const elapsed = now - entry.second;
 
 	// pop off the corresponding enter zone
 	gContext->zoneStack.pop_back();
-	ev.exit_zone.depth = static_cast<uint16_t>(gContext->zoneStack.size());
+	auto const depth = static_cast<uint16_t>(gContext->zoneStack.size());
 
 	for (auto sink : gContext->sinks)
-		sink.second(sink.first, &ev);
+		sink->ExitZone(zoneId, start, elapsed, depth);
 }
 
-YS_API void YS_CALL _ys_tick()
+YS_API ysError YS_CALL ysTick()
 {
-	ys_event_t ev;
-	ev.tick.clockNow = gContext->ReadClockTicks();
-	ev.tick.type = YS_EV_TICK;
+	// can't tick without a context
+	if (gContext == nullptr)
+		return ysError::UninitializedLibrary;
+
+	auto const now = gContext->ReadClockTicks();
 
 	for (auto sink : gContext->sinks)
-		sink.second(sink.first, &ev);
+		sink->Tick(now);
+
+	return ysError::Success;
 }
 
-YS_API ys_error_t YS_CALL _ys_add_sink(void* userData, ys_event_cb callback)
+YS_API ysError YS_CALL ysAddSink(ysISink* sink)
 {
-	if (callback == nullptr)
-		return YS_INVALID_PARAMETER;
+	// can't add a sink without a context
+	if (gContext == nullptr)
+		return ysError::UninitializedLibrary;
 
-	gContext->sinks.emplace_back(userData, callback);
+	if (sink == nullptr)
+		return ysError::InvalidParameter;
+
+	gContext->sinks.push_back(sink);
 
 	auto const now = gContext->ReadClockTicks();
 	auto const freq = gContext->ReadClockFrequency();
 
 	// start the sink
-	ys_event_t ev;
-	ev.start.type = YS_EV_START;
-	ev.start.clockNow = now;
-	ev.start.clockFrequency = freq;
-
-	callback(userData, &ev);
+	sink->Start(now, freq);
 
 	// register existing state
 
-	ev.type = YS_EV_ADD_LOCATION;
 	for (auto const& location : gContext->locations)
-	{
-		ev.add_location.locationId = static_cast<uint16_t>(&location - gContext->locations.data());
-		ev.add_location.fileName = std::get<0>(location);
-		ev.add_location.functionName = std::get<1>(location);
-		ev.add_location.lineNumber = std::get<2>(location);
-		callback(userData, &ev);
-	}
+		sink->AddLocation(static_cast<uint16_t>(&location - gContext->locations.data()), std::get<0>(location), std::get<2>(location), std::get<1>(location));
 
-	ev.type = YS_EV_ADD_COUNTER;
 	for (auto const& counter : gContext->counters)
-	{
-		ev.add_counter.counterId = static_cast<uint16_t>(&counter - gContext->counters.data());
-		ev.add_counter.counterName = counter;
-		callback(userData, &ev);
-	}
+		sink->AddCounter(static_cast<uint16_t>(&counter - gContext->counters.data()), counter);
 
-	ev.type = YS_EV_ADD_ZONE;
 	for (auto const& zone : gContext->zones)
-	{
-		ev.add_zone.zoneId = static_cast<uint16_t>(&zone - gContext->zones.data());
-		ev.add_zone.zoneName = zone;
-		callback(userData, &ev);
-	}
+		sink->AddZone(static_cast<uint16_t>(&zone - gContext->zones.data()), zone);
 
-	ev.type = YS_EV_ENTER_ZONE;
 	for (auto const& zone : gContext->zoneStack)
-	{
-		ev.enter_zone.zoneId = zone.first;
-		ev.enter_zone.locationId = 0; // FIXME
-		ev.enter_zone.clockNow = zone.second;
-		ev.enter_zone.depth = static_cast<uint8_t>(&zone - gContext->zoneStack.data());
-		callback(userData, &ev);
-	}
+		sink->EnterZone(zone.first, 0/* FIXME */, zone.second, static_cast<uint8_t>(&zone - gContext->zoneStack.data()));
 
-	return YS_OK;
+	return ysError::Success;
 }
 
-YS_API void YS_CALL _ys_remove_sink(void* userData, ys_event_cb callback)
+YS_API ysError YS_CALL ysRemoveSink(ysISink* sink)
 {
-	auto const sink = std::make_pair(userData, callback);
+	// can't remove a sink without a context
+	if (gContext == nullptr)
+		return ysError::UninitializedLibrary;
+
+	if (sink == nullptr)
+		return ysError::InvalidParameter;
 
 	// find the sink to remove it
 	auto it = std::find(begin(gContext->sinks), end(gContext->sinks), sink);
 	if (it == end(gContext->sinks))
-		return;
+		return ysError::InvalidParameter;
 
 	gContext->sinks.erase(it);
 
 	// stop the sink
-	ys_event_t ev;
-	ev.stop.type = YS_EV_STOP;
-	ev.stop.clockNow = gContext->ReadClockTicks();
+	auto const now = gContext->ReadClockTicks();
+	sink->Stop(now);
 
-	callback(userData, &ev);
+	return ysError::Success;
 }
 
-} // extern "C"
+#endif // !defined(NO_YS)

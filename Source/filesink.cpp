@@ -1,16 +1,19 @@
 // Copyright (C) 2014 Sean Middleditch, all rights reserverd.
 
 #include "yardstick.h"
-#include "yardstick.hpp"
+
+#if !defined(NO_YS)
 
 #include <cstring>
 #include <cstdio>
+
+using namespace _ys__detail;
 
 namespace
 {
 	/// File sink.
 	/// \internal
-	class ProfileFileSink final : public ys::ISink
+	class ProfileFileSink final : public ysISink
 	{
 		static size_t const kBufferSize = 32 * 1024;
 
@@ -36,15 +39,15 @@ namespace
 
 		bool IsOpen() const;
 
-		void Start(ys_clock_t clockNow, ys_clock_t clockFrequence) override;
-		void AddLocation(uint16_t id, char const* file, int line, char const* function) override;
-		void AddCounter(uint16_t id, char const* name) override;
-		void AddZone(uint16_t id, char const* name) override;
-		void IncrementCounter(uint16_t id, uint16_t loc, uint64_t time, double value) override;
-		void EnterZone(uint16_t id, uint16_t loc, uint64_t start, uint16_t depth) override {} // ignore
-		void ExitZone(uint16_t id, uint64_t start, uint64_t ticks, uint16_t depth) override;
-		void Tick(ys_clock_t clockNow) override;
-		void Stop(ys_clock_t clockNow) override;
+		void YS_CALL Start(ysClockT clockNow, ysClockT clockFrequence) override;
+		void YS_CALL AddLocation(uint16_t id, char const* file, int line, char const* function) override;
+		void YS_CALL AddCounter(uint16_t id, char const* name) override;
+		void YS_CALL AddZone(uint16_t id, char const* name) override;
+		void YS_CALL IncrementCounter(uint16_t id, uint16_t loc, uint64_t time, double value) override;
+		void YS_CALL EnterZone(uint16_t id, uint16_t loc, uint64_t start, uint16_t depth) override {} // ignore
+		void YS_CALL ExitZone(uint16_t id, uint64_t start, uint64_t ticks, uint16_t depth) override;
+		void YS_CALL Tick(ysClockT clockNow) override;
+		void YS_CALL Stop(ysClockT clockNow) override;
 	};
 
 	void ProfileFileSink::Flush()
@@ -123,7 +126,7 @@ namespace
 		return true;
 	}
 
-	void ProfileFileSink::Start(ys_clock_t clockNow, ys_clock_t clockFrequency)
+	void ProfileFileSink::Start(ysClockT clockNow, ysClockT clockFrequency)
 	{
 		// simple enough header
 		WriteBuffer("PROF0102\n", 8);
@@ -189,9 +192,11 @@ namespace
 		Write16(depth);
 	}
 
-	void ProfileFileSink::Tick(ys_clock_t clockNow)
+	void ProfileFileSink::Tick(ysClockT clockNow)
 	{
 		Write8(7); // tick header
 		Write64(clockNow);
 	}
 }
+
+#endif // !defined(NO_YS)
