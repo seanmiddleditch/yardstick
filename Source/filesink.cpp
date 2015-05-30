@@ -4,16 +4,18 @@
 
 #if !defined(NO_YS)
 
+#include <type_traits>
 #include <cstring>
 #include <cstdio>
 
-using namespace _ys__detail;
+using namespace ys;
+using namespace _ys_internal;
 
 namespace
 {
 	/// File sink.
 	/// \internal
-	class ProfileFileSink final : public ysISink
+	class ProfileFileSink final : public ISink
 	{
 		static size_t const kBufferSize = 32 * 1024;
 
@@ -31,6 +33,10 @@ namespace
 		void Write16(uint16_t value);
 		void Write8(uint8_t value) { WriteBuffer(&value, 1); }
 
+		void WriteId(ZoneId id) { Write16(static_cast<std::underlying_type_t<ZoneId>>(id)); }
+		void WriteId(CounterId id) { Write16(static_cast<std::underlying_type_t<CounterId>>(id)); }
+		void WriteId(LocationId id) { Write16(static_cast<std::underlying_type_t<LocationId>>(id)); }
+
 	public:
 		ProfileFileSink(size_t capacity = kBufferSize) : m_Capacity(capacity) {}
 
@@ -39,15 +45,15 @@ namespace
 
 		bool IsOpen() const;
 
-		void YS_CALL Start(ysClockT clockNow, ysClockT clockFrequence) override;
-		void YS_CALL AddLocation(uint16_t id, char const* file, int line, char const* function) override;
-		void YS_CALL AddCounter(uint16_t id, char const* name) override;
-		void YS_CALL AddZone(uint16_t id, char const* name) override;
-		void YS_CALL IncrementCounter(uint16_t id, uint16_t loc, uint64_t time, double value) override;
-		void YS_CALL EnterZone(uint16_t id, uint16_t loc, uint64_t start, uint16_t depth) override {} // ignore
-		void YS_CALL ExitZone(uint16_t id, uint64_t start, uint64_t ticks, uint16_t depth) override;
-		void YS_CALL Tick(ysClockT clockNow) override;
-		void YS_CALL Stop(ysClockT clockNow) override;
+		void YS_CALL Start(Clock clockNow, Clock clockFrequence) override;
+		void YS_CALL AddLocation(LocationId id, char const* file, int line, char const* function) override;
+		void YS_CALL AddCounter(CounterId id, char const* name) override;
+		void YS_CALL AddZone(ZoneId id, char const* name) override;
+		void YS_CALL IncrementCounter(CounterId id, LocationId loc, uint64_t time, double value) override;
+		void YS_CALL EnterZone(ZoneId id, LocationId loc, uint64_t start, uint16_t depth) override {} // ignore
+		void YS_CALL ExitZone(ZoneId id, uint64_t start, uint64_t ticks, uint16_t depth) override;
+		void YS_CALL Tick(Clock clockNow) override;
+		void YS_CALL Stop(Clock clockNow) override;
 	};
 
 	void ProfileFileSink::Flush()
@@ -126,10 +132,10 @@ namespace
 		return true;
 	}
 
-	void ProfileFileSink::Start(ysClockT clockNow, ysClockT clockFrequency)
+	void ProfileFileSink::Start(Clock clockNow, Clock clockFrequency)
 	{
 		// simple enough header
-		WriteBuffer("PROF0102\n", 8);
+		WriteBuffer("PROF0103\n", 8);
 		Write64(clockNow);
 		Write64(clockFrequency);
 	}
@@ -151,48 +157,48 @@ namespace
 		return m_File != nullptr;
 	}
 
-	void ProfileFileSink::AddLocation(uint16_t id, char const* file, int line, char const* function)
+	void ProfileFileSink::AddLocation(LocationId id, char const* file, int line, char const* function)
 	{
 		Write8(1); // new location header
-		Write16(id);
+		WriteId(id);
 		Write16((uint16_t)line);
 		WriteString(file);
 		WriteString(function);
 	}
 
-	void ProfileFileSink::AddCounter(uint16_t id, char const* name)
+	void ProfileFileSink::AddCounter(CounterId id, char const* name)
 	{
 		Write8(2); // new counter header
-		Write16(id);
+		WriteId(id);
 		WriteString(name);
 	}
 
-	void ProfileFileSink::AddZone(uint16_t id, char const* name)
+	void ProfileFileSink::AddZone(ZoneId id, char const* name)
 	{
 		Write8(3); // new zone header
-		Write16(id);
+		WriteId(id);
 		WriteString(name);
 	}
 
-	void ProfileFileSink::IncrementCounter(uint16_t id, uint16_t loc, uint64_t time, double value)
+	void ProfileFileSink::IncrementCounter(CounterId id, LocationId loc, uint64_t time, double value)
 	{
 		Write8(4); // counter value header
-		Write16(id);
-		Write16(loc);
+		WriteId(id);
+		WriteId(loc);
 		Write64(time);
 		WriteFloat64(value);
 	}
 
-	void ProfileFileSink::ExitZone(uint16_t id, uint64_t start, uint64_t ticks, uint16_t depth)
+	void ProfileFileSink::ExitZone(ZoneId id, uint64_t start, uint64_t ticks, uint16_t depth)
 	{
 		Write8(6); // zone span header
-		Write16(id);
+		WriteId(id);
 		Write64(start);
 		Write64(ticks);
 		Write16(depth);
 	}
 
-	void ProfileFileSink::Tick(ysClockT clockNow)
+	void ProfileFileSink::Tick(Clock clockNow)
 	{
 		Write8(7); // tick header
 		Write64(clockNow);
