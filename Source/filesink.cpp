@@ -14,7 +14,7 @@ using namespace _ys_internal;
 namespace
 {
 	/// File sink.
-	/// \internal
+	/// @internal
 	class ProfileFileSink final : public ISink
 	{
 		static size_t const kBufferSize = 32 * 1024;

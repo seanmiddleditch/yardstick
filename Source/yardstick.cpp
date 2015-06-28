@@ -22,7 +22,7 @@ using namespace _ys_internal;
 namespace
 {
 	/// Definition of a location.
-	/// \internal
+	/// @internal
 	struct Location
 	{
 		char const* file;
@@ -34,7 +34,7 @@ namespace
 	bool operator==(Location const& lhs, Location const& rhs) { return lhs.file == rhs.file && lhs.func == rhs.func && lhs.line == rhs.line; }
 
 	/// Entry for the zone stack.
-	/// \internal
+	/// @internal
 	struct Zone
 	{
 		ZoneId id;
@@ -42,14 +42,14 @@ namespace
 	};
 
 	/// Default realloc() wrapper.
-	/// \internal
+	/// @internal
 	void* YS_CALL DefaultAllocator(void* block, std::size_t bytes)
 	{
 		return realloc(block, bytes);
 	}
 
 	/// Default clock tick reader.
-	/// \internal
+	/// @internal
 	Clock YS_CALL DefaultReadClock()
 	{
 #if defined(_WIN32)
@@ -62,7 +62,7 @@ namespace
 	}
 
 	/// Default clock frequency reader.
-	/// \internal
+	/// @internal
 	Clock YS_CALL DefaultReadFrequency()
 	{
 #if defined(_WIN32)
@@ -75,7 +75,7 @@ namespace
 	}
 
 	/// Allocator using the main context.
-	/// \internal
+	/// @internal
 	template <typename T>
 	struct YsAllocator
 	{
@@ -86,7 +86,7 @@ namespace
 	};
 
 	/// An active context.
-	/// \internal
+	/// @internal
 	struct Context final
 	{
 		AllocatorCallback Alloc = DefaultAllocator;
@@ -101,7 +101,7 @@ namespace
 	};
 
 	/// The currently active context;
-	/// \internal
+	/// @internal
 	Context* gContext = nullptr;
 }
 

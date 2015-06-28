@@ -22,7 +22,7 @@
 #	error "Unsupported platform"
 #endif
 
-/// \brief Helper needed to concatenate string.
+/// Helper needed to concatenate string.
 #define YS_CAT2(a, b) a##b
 #define YS_CAT(a, b) YS_CAT2(a,b)
 
@@ -30,52 +30,52 @@
 
 namespace ys
 {
-	/// \brief Type returned by the high-resolution timer.
+	/// Type returned by the high-resolution timer.
 	using Clock = std::uint64_t;
 
-	/// \brief Unique handle to a location.
+	/// Unique handle to a location.
 	enum class LocationId : std::uint32_t {};
 
-	/// \brief Unique handle to a zone.
+	/// Unique handle to a zone.
 	enum class ZoneId : std::uint16_t {};
 
-	/// \brief Unique handle to a counter.
+	/// Unique handle to a counter.
 	enum class CounterId : std::uint16_t {};
 
-	/// \brief Reads the high-resolution timer.
-	/// \returns The current timer value, akin to x86 rtdsc.
+	/// Reads the high-resolution timer.
+	/// @returns The current timer value, akin to x86 rtdsc.
 	using ReadTicksCallback = Clock(YS_CALL*)();
 
-	/// \brief Reads the high-resolution timer's frequency.
-	/// \returns The frequency, akin to x86's rtdsc frequency.
+	/// Reads the high-resolution timer's frequency.
+	/// @returns The frequency, akin to x86's rtdsc frequency.
 	using ReadFrequencyCallback = Clock(YS_CALL*)();
 
-	/// \brief Memory allocation callback.
+	/// Memory allocation callback.
 	/// Follows the rules of realloc(), except that it will only be used to allocate or free.
 	using AllocatorCallback = void*(YS_CALL*)(void* block, std::size_t bytes);
 
-	/// \brief Error return codes.
+	/// Error return codes.
 	enum class ErrorCode : std::uint8_t
 	{
-		/// \brief Success result.
+		/// Success result.
 		Success,
-		/// \brief One or more parameters contain invalid values.
+		/// One or more parameters contain invalid values.
 		InvalidParameter,
-		/// \brief Memory or disk space was required but resources are exhausted.
+		/// Memory or disk space was required but resources are exhausted.
 		ResourcesExhausted,
-		/// \brief A failure was detected but the cause is not known.
+		/// A failure was detected but the cause is not known.
 		UnknownError,
-		/// \brief The user attempted to do something more than once that can only be done once (like initialize the library).
+		/// The user attempted to do something more than once that can only be done once (like initialize the library).
 		Duplicate,
-		/// \brief A system error occurred and the system error reporting facilities may contain more information.
+		/// A system error occurred and the system error reporting facilities may contain more information.
 		SystemFailure,
-		/// \brief Yardstick was not initialized before API function call.
+		/// Yardstick was not initialized before API function call.
 		UninitializedLibrary,
-		/// \brief Yardstick support has been disabled.
+		/// Yardstick support has been disabled.
 		DisabledLibrary
 	};
 
-	/// \brief An event sink.
+	/// An event sink.
 	class ISink
 	{
 	protected:
@@ -107,48 +107,48 @@ namespace _ys_internal
 {
 	using namespace ys;
 
-	/// \brief Initializes the Yardstick library.
+	/// Initializes the Yardstick library.
 	/// Must be called before any other Yardstick function.
-	/// \param allocator An allocation function (must not be nullptr).
-	/// \param readClock Function to read a clock value from the system.
-	/// \param readFrequency Function to read a clock frequency from the system.
-	/// \returns YS_OK on success, or another value on error.
+	/// @param allocator An allocation function (must not be nullptr).
+	/// @param readClock Function to read a clock value from the system.
+	/// @param readFrequency Function to read a clock frequency from the system.
+	/// @returns YS_OK on success, or another value on error.
 	YS_API ErrorCode YS_CALL Initialize(AllocatorCallback allocator, ReadTicksCallback readClock, ReadFrequencyCallback readFrequency);
 
-	/// \brief Shuts down the Yardstick library and frees any resources.
+	/// Shuts down the Yardstick library and frees any resources.
 	/// Yardstick functions cannot be called after this point without reinitializing it.
 	YS_API void YS_CALL Shutdown();
 
-	/// \brief Registers a new sink.
-	/// \param sink The sink that is invoked on events.
-	/// \return YS_OK on success, or another value on error.
+	/// Registers a new sink.
+	/// @param sink The sink that is invoked on events.
+	/// @returns YS_OK on success, or another value on error.
 	YS_API ErrorCode YS_CALL AddSink(ISink* sink);
 
-	/// \brief Removes a registerd sink.
-	/// \param sink The sink that is invoked on events.
+	/// Removes a registerd sink.
+	/// @param sink The sink that is invoked on events.
 	YS_API ErrorCode YS_CALL RemoveSink(ISink* sink);
 
-	/// \brief Call once per frame.
+	/// Call once per frame.
 	YS_API ErrorCode YS_CALL Tick();
 
-	/// \brief Registers a location to be used for future calls.
-	/// \internal
+	/// Registers a location to be used for future calls.
+	/// @internal
 	YS_API LocationId YS_CALL AddLocation(char const* fileName, int line, char const* functionName);
 
-	/// \brief Registers a counter to be used for future calls.
-	/// \internal
+	/// Registers a counter to be used for future calls.
+	/// @internal
 	YS_API CounterId YS_CALL AddCounter(const char* counterName);
 
-	/// \brief Registers a zone to be used for future calls.
-	/// \internal
+	/// Registers a zone to be used for future calls.
+	/// @internal
 	YS_API ZoneId YS_CALL AddZone(const char* zoneName);
 
-	/// \brief Adds a value to a counter.
-	/// \internal
+	/// Adds a value to a counter.
+	/// @internal
 	YS_API void YS_CALL IncrementCounter(CounterId counterId, LocationId locationId, double amount);
 
-	/// \brief Managed a scoped zone.
-	/// \internal
+	/// Managed a scoped zone.
+	/// @internal
 	struct ScopedProfileZone final
 	{
 		YS_API ScopedProfileZone(ZoneId zoneId, LocationId locationId);
@@ -181,7 +181,7 @@ namespace _ys_internal
 
 #if !defined(NO_YS)
 
-/// \brief Marks the current scope as being in a zone, and automatically closes the zone at the end of the scope.
+/// Marks the current scope as being in a zone, and automatically closes the zone at the end of the scope.
 #	define ysZone(name) \
 	static auto const YS_CAT(_ys_zone_id, __LINE__) = ::_ys_internal::AddZone(("" name)); \
 	static auto const YS_CAT(_ys_location_id, __LINE__) = ::_ys_internal::AddLocation(__FILE__, __LINE__, __FUNCTION__); \
