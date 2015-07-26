@@ -169,6 +169,8 @@ ysErrorCode YS_API _ysInitialize(ysConfiguration const& config)
 	if (config.readFrequency != nullptr)
 		gConfig.readFrequency = config.readFrequency;
 
+	gInitialized = true;
+
 	return ysErrorCode::Success;
 }
 
