@@ -26,179 +26,185 @@
 #define YS_CAT2(a, b) a##b
 #define YS_CAT(a, b) YS_CAT2(a,b)
 
-// ---- Types ----
+// ---- Public API ----
 
-namespace ys
+/// Type returned by the high-resolution timer.
+using ysTime = std::uint64_t;
+
+/// Unique handle to a location.
+enum class ysLocationId : std::uint32_t { None = 0 };
+
+/// Unique handle to a zone.
+enum class ysZoneId : std::uint16_t { None = 0 };
+
+/// Unique handle to a counter.
+enum class ysCounterId : std::uint16_t { None = 0 };
+
+/// Reads the high-resolution timer.
+/// @returns The current timer value, akin to x86 rtdsc.
+using ysReadClock = ysTime(YS_CALL*)();
+
+/// Reads the high-resolution timer's frequency.
+/// @returns The frequency, akin to x86's rtdsc frequency.
+using ysReadFrequency = ysTime(YS_CALL*)();
+
+/// Memory allocation callback.
+/// Follows the rules of realloc(), except that it will only be used to allocate or free.
+using ysAllocator = void*(YS_CALL*)(void* block, std::size_t bytes);
+
+/// Error return codes.
+enum class ysErrorCode : std::uint8_t
 {
-	/// Type returned by the high-resolution timer.
-	using Clock = std::uint64_t;
+	/// Success result.
+	Success,
+	/// One or more parameters contain invalid values.
+	InvalidParameter,
+	/// Memory or disk space was required but resources are exhausted.
+	ResourcesExhausted,
+	/// A failure was detected but the cause is not known.
+	UnknownError,
+	/// The user attempted to do something more than once that can only be done once (like initialize the library).
+	Duplicate,
+	/// A system error occurred and the system error reporting facilities may contain more information.
+	SystemFailure,
+	/// Yardstick was not initialized before API function call.
+	UninitializedLibrary,
+	/// Yardstick support has been disabled.
+	DisabledLibrary
+};
 
-	/// Unique handle to a location.
-	enum class LocationId : std::uint32_t {};
-
-	/// Unique handle to a zone.
-	enum class ZoneId : std::uint16_t {};
-
-	/// Unique handle to a counter.
-	enum class CounterId : std::uint16_t {};
-
-	/// Reads the high-resolution timer.
-	/// @returns The current timer value, akin to x86 rtdsc.
-	using ReadTicksCallback = Clock(YS_CALL*)();
-
-	/// Reads the high-resolution timer's frequency.
-	/// @returns The frequency, akin to x86's rtdsc frequency.
-	using ReadFrequencyCallback = Clock(YS_CALL*)();
-
-	/// Memory allocation callback.
-	/// Follows the rules of realloc(), except that it will only be used to allocate or free.
-	using AllocatorCallback = void*(YS_CALL*)(void* block, std::size_t bytes);
-
-	/// Error return codes.
-	enum class ErrorCode : std::uint8_t
-	{
-		/// Success result.
-		Success,
-		/// One or more parameters contain invalid values.
-		InvalidParameter,
-		/// Memory or disk space was required but resources are exhausted.
-		ResourcesExhausted,
-		/// A failure was detected but the cause is not known.
-		UnknownError,
-		/// The user attempted to do something more than once that can only be done once (like initialize the library).
-		Duplicate,
-		/// A system error occurred and the system error reporting facilities may contain more information.
-		SystemFailure,
-		/// Yardstick was not initialized before API function call.
-		UninitializedLibrary,
-		/// Yardstick support has been disabled.
-		DisabledLibrary
-	};
-
-	/// An event sink.
-	class ISink
-	{
-	protected:
-		ISink() = default;
-
-	public:
-		virtual ~ISink() = default;
-
-		ISink(ISink const&) = delete;
-		ISink& operator=(ISink const&) = delete;
-
-		virtual void YS_CALL Start(Clock clockNow, Clock clockFrequency) = 0;
-		virtual void YS_CALL Stop(Clock clockNow) = 0;
-		virtual void YS_CALL AddLocation(LocationId locatonId, char const* fileName, int line, char const* functionName) = 0;
-		virtual void YS_CALL AddCounter(CounterId counterId, char const* counterName) = 0;
-		virtual void YS_CALL AddZone(ZoneId zoneId, char const* zoneName) = 0;
-		virtual void YS_CALL IncrementCounter(CounterId counterId, LocationId locationId, uint64_t clockNow, double value) = 0;
-		virtual void YS_CALL EnterZone(ZoneId zoneId, LocationId locationId, Clock clockNow, uint16_t depth) = 0;
-		virtual void YS_CALL ExitZone(ZoneId zoneId, Clock clockStart, uint64_t clockElapsed, uint16_t depth) = 0;
-		virtual void YS_CALL Tick(Clock clockNow) = 0;
-	};
-} // namespace ys
-
-#if !defined(NO_YS)
-
-// ---- Functions ----
-
-namespace _ys_internal
+/// An event sink.
+class ysSink
 {
-	using namespace ys;
+protected:
+	ysSink() = default;
 
-	/// Initializes the Yardstick library.
-	/// Must be called before any other Yardstick function.
-	/// @param allocator An allocation function (must not be nullptr).
-	/// @param readClock Function to read a clock value from the system.
-	/// @param readFrequency Function to read a clock frequency from the system.
-	/// @returns YS_OK on success, or another value on error.
-	YS_API ErrorCode YS_CALL Initialize(AllocatorCallback allocator, ReadTicksCallback readClock, ReadFrequencyCallback readFrequency);
+public:
+	virtual ~ysSink() = default;
 
-	/// Shuts down the Yardstick library and frees any resources.
-	/// Yardstick functions cannot be called after this point without reinitializing it.
-	YS_API void YS_CALL Shutdown();
+	ysSink(ysSink const&) = delete;
+	ysSink& operator=(ysSink const&) = delete;
 
-	/// Registers a new sink.
-	/// @param sink The sink that is invoked on events.
-	/// @returns YS_OK on success, or another value on error.
-	YS_API ErrorCode YS_CALL AddSink(ISink* sink);
+	virtual void YS_CALL BeginProfile(ysTime clockNow, ysTime clockFrequency) = 0;
+	virtual void YS_CALL EndProfile(ysTime clockNow) = 0;
 
-	/// Removes a registerd sink.
-	/// @param sink The sink that is invoked on events.
-	YS_API ErrorCode YS_CALL RemoveSink(ISink* sink);
+	virtual void YS_CALL AddLocation(ysLocationId locatonId, char const* fileName, int line, char const* functionName) = 0;
+	virtual void YS_CALL AddCounter(ysCounterId counterId, char const* counterName) = 0;
+	virtual void YS_CALL AddZone(ysZoneId zoneId, char const* zoneName) = 0;
 
-	/// Call once per frame.
-	YS_API ErrorCode YS_CALL Tick();
+	virtual void YS_CALL IncrementCounter(ysCounterId counterId, ysLocationId locationId, ysTime clockNow, double value) = 0;
 
-	/// Registers a location to be used for future calls.
-	/// @internal
-	YS_API LocationId YS_CALL AddLocation(char const* fileName, int line, char const* functionName);
+	virtual void YS_CALL RecordZone(ysZoneId zoneId, ysLocationId, ysTime clockStart, ysTime clockEnd) = 0;
 
-	/// Registers a counter to be used for future calls.
-	/// @internal
-	YS_API CounterId YS_CALL AddCounter(const char* counterName);
+	virtual void YS_CALL Tick(ysTime clockNow) = 0;
+};
 
-	/// Registers a zone to be used for future calls.
-	/// @internal
-	YS_API ZoneId YS_CALL AddZone(const char* zoneName);
+/// Configuration object used to initialize the library.
+struct ysConfiguration
+{
+	YS_API ysConfiguration();
 
-	/// Adds a value to a counter.
-	/// @internal
-	YS_API void YS_CALL IncrementCounter(CounterId counterId, LocationId locationId, double amount);
+	ysTime(YS_CALL* readClock)();
+	ysTime(YS_CALL* readFrequency)();
+	void*(YS_CALL* allocator)(void* block, std::size_t bytes);
+	ysSink* sink;
+};
 
-	/// Managed a scoped zone.
-	/// @internal
-	struct ScopedProfileZone final
-	{
-		YS_API ScopedProfileZone(ZoneId zoneId, LocationId locationId);
-		YS_API ~ScopedProfileZone();
-
-		ScopedProfileZone(ScopedProfileZone const&) = delete;
-		ScopedProfileZone& operator=(ScopedProfileZone const&) = delete;
-	};
-} // namespace _ys_internal
-
-#endif // !defined(NO_YS)
-
-// ---- Public Interface ----
-
-#if !defined(NO_YS)
-#	define ysInitialize(allocator, readClock, readFrequency) (::_ys_internal::Initialize((allocator), (readClock), (readFrequency)))
-#	define ysShutdown() (::_ys_internal::Shutdown())
-#	define ysAddSink(sink) (::_ys_internal::AddSink((sink)))
-#	define ysRemoveSink(sink) (::_ys_internal::RemoveSink((sink)))
-#	define ysTick() (::_ys_internal::Tick())
-#else // !defined(NO_YS)
-#	define ysInitialize(allocator, readClock, readFrequency) (ErrorCode::DisabledLibrary)
-#	define ysShutdown() (ErrorCode::DisabledLibrary)
-#	define ysAddSink(sink) (ErrorCode::DisabledLibrary)
-#	define ysRemoveSink(sink) (ErrorCode::DisabledLibrary)
-#	define ysTick() (ErrorCode::DisabledLibrary)
-#endif // !defined(NO_YS)
-
-// ---- Macros ----
+// ---- Public Macros ----
 
 #if !defined(NO_YS)
 
-/// Marks the current scope as being in a zone, and automatically closes the zone at the end of the scope.
+#	define ysInitialize(config) (::_ysInitialize((config)))
+#	define ysShutdown() (::_ysShutdown())
+#	define ysTick() (::_ysTick())
+#	define ysAlloc(size) (::_ysAlloc((size)))
+#	define ysFree(ptr) (::_ysFree((ptr)))
+
+  /// Marks the current scope as being in a zone, and automatically closes the zone at the end of the scope.
 #	define ysZone(name) \
-	static auto const YS_CAT(_ys_zone_id, __LINE__) = ::_ys_internal::AddZone(("" name)); \
-	static auto const YS_CAT(_ys_location_id, __LINE__) = ::_ys_internal::AddLocation(__FILE__, __LINE__, __FUNCTION__); \
-	::_ys_internal::ScopedProfileZone YS_CAT(_ys_zone, __LINE__)(YS_CAT(_ys_zone_id, __LINE__), YS_CAT(_ys_location_id, __LINE__))
+	static auto const YS_CAT(_ys_zone_id, __LINE__) = ::_ysAddZone(("" name)); \
+	static auto const YS_CAT(_ys_location_id, __LINE__) = ::_ysAddLocation(__FILE__, __LINE__, __FUNCTION__); \
+	::_ysScopedProfileZone YS_CAT(_ys_zone, __LINE__)(YS_CAT(_ys_zone_id, __LINE__), YS_CAT(_ys_location_id, __LINE__))
 
 #	define ysCount(name, amount) \
 	do{ \
-		static auto const YS_CAT(_ys_counter_id, __LINE__) = ::_ys_internal::AddCounter(("" name)); \
-		static auto const YS_CAT(_ys_location_id, __LINE__) = ::_ys_internal::AddLocation(__FILE__, __LINE__, __FUNCTION__); \
-		::_ys_internal::IncrementCounter(YS_CAT(_ys_counter_id, __LINE__), YS_CAT(_ys_location_id, __LINE__), (amount)); \
+		static auto const YS_CAT(_ys_counter_id, __LINE__) = ::_ysAddCounter(("" name)); \
+		static auto const YS_CAT(_ys_location_id, __LINE__) = ::_ysAddLocation(__FILE__, __LINE__, __FUNCTION__); \
+		::_ysIncrementCounter(YS_CAT(_ys_counter_id, __LINE__), YS_CAT(_ys_location_id, __LINE__), (amount)); \
 	}while(false)
-
 
 #else // !defined(NO_YS)
 
+#	define ysInitialize(config) (::ys::ErrorCode::DisabledLibrary)
+#	define ysShutdown() (::ys::ErrorCode::DisabledLibrary)
+#	define ysTick() (::ys::ErrorCode::DisabledLibrary)
+#	define ysAlloc(size) (nullptr)
+#	define ysFree(ptr) do{}while(false)
 #	define ysZone(name) do{}while(false)
 #	define ysCount(name, amount) do{}while(false)
+
+#endif // !defined(NO_YS)
+
+#if !defined(NO_YS)
+
+// ---- Private Implementation ----
+
+/// Initializes the Yardstick library.
+/// Must be called before any other Yardstick function.
+/// @param config Configuration values for the context.
+/// @param sink The sink where all events will be written.
+/// @param readClock Function to read a clock value from the system.
+/// @param readFrequency Function to read a clock frequency from the system.
+/// @returns YS_OK on success, or another value on error.
+YS_API ysErrorCode YS_CALL _ysInitialize(ysConfiguration const& config);
+
+/// Shuts down the Yardstick library and frees any resources.
+/// Yardstick functions cannot be called after this point without reinitializing it.
+YS_API void YS_CALL _ysShutdown();
+
+/// Use the configured allocator to retrieve memory.
+/// @param size Size in bytes of memory to allocate.
+/// @internal
+YS_API void* YS_CALL _ysAlloc(std::size_t size);
+
+/// Use the configured allocator to free memory.
+/// @param ptr Pointer to memory to free
+/// @internal
+YS_API void* YS_CALL _ysFree(void* ptr);
+
+/// Call once per frame.
+YS_API ysErrorCode YS_CALL _ysTick();
+
+/// Registers a location to be used for future calls.
+/// @internal
+YS_API ysLocationId YS_CALL _ysAddLocation(char const* fileName, int line, char const* functionName);
+
+/// Registers a counter to be used for future calls.
+/// @internal
+YS_API ysCounterId YS_CALL _ysAddCounter(const char* counterName);
+
+/// Registers a zone to be used for future calls.
+/// @internal
+YS_API ysZoneId YS_CALL _ysAddZone(const char* zoneName);
+
+/// Adds a value to a counter.
+/// @internal
+YS_API void YS_CALL _ysIncrementCounter(ysCounterId counterId, ysLocationId locationId, double amount);
+
+/// Managed a scoped zone.
+/// @internal
+struct _ysScopedProfileZone final
+{
+	YS_API _ysScopedProfileZone(ysZoneId zoneId, ysLocationId locationId);
+	YS_API ~_ysScopedProfileZone();
+
+	_ysScopedProfileZone(_ysScopedProfileZone const&) = delete;
+	_ysScopedProfileZone& operator=(_ysScopedProfileZone const&) = delete;
+
+	ysTime startTime;
+	ysZoneId zoneId;
+	ysLocationId locationId;
+};
 
 #endif // !defined(NO_YS)
 

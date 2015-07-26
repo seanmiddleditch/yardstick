@@ -8,70 +8,66 @@
 #include <cstring>
 #include <cstdio>
 
-using namespace ys;
-using namespace _ys_internal;
-
 namespace
 {
 	/// File sink.
 	/// @internal
-	class ProfileFileSink final : public ISink
+	class ProfileFileSink final : public ysSink
 	{
 		static size_t const kBufferSize = 32 * 1024;
 
-		FILE* m_File = nullptr;
-		char* m_Buffer = nullptr;
-		size_t m_Cursor = 0;
-		size_t m_Capacity = 0;
+		FILE* _file = nullptr;
+		char* _buffer = nullptr;
+		size_t _cursor = 0;
+		size_t _capacity = 0;
 
 		void Flush();
 		void WriteBuffer(void const* bytes, size_t size);
 		void WriteString(char const* string);
-		void WriteFloat64(double value);
-		void Write64(uint64_t value);
-		void Write32(uint32_t value);
-		void Write16(uint16_t value);
+		void WriteFloat64(double value) { WriteBuffer(&value, sizeof(value)); }
+		void Write64(uint64_t value) { WriteBuffer(&value, sizeof(value)); }
+		void Write32(uint32_t value) { WriteBuffer(&value, sizeof(value)); }
+		void Write16(uint16_t value) { WriteBuffer(&value, sizeof(value)); }
 		void Write8(uint8_t value) { WriteBuffer(&value, 1); }
 
-		void WriteId(ZoneId id) { Write16(static_cast<std::underlying_type_t<ZoneId>>(id)); }
-		void WriteId(CounterId id) { Write16(static_cast<std::underlying_type_t<CounterId>>(id)); }
-		void WriteId(LocationId id) { Write16(static_cast<std::underlying_type_t<LocationId>>(id)); }
+		void WriteId(ysZoneId id) { Write16(static_cast<std::underlying_type_t<ysZoneId>>(id)); }
+		void WriteId(ysCounterId id) { Write16(static_cast<std::underlying_type_t<ysCounterId>>(id)); }
+		void WriteId(ysLocationId id) { Write16(static_cast<std::underlying_type_t<ysLocationId>>(id)); }
 
 	public:
-		ProfileFileSink(size_t capacity = kBufferSize) : m_Capacity(capacity) {}
+		ProfileFileSink(size_t capacity = kBufferSize) : _capacity(capacity) {}
 
 		bool OpenFile(char const* fileName);
-		void Stop();
+		void CloseFile();
 
-		bool IsOpen() const;
+		bool IsOpen() const { return _file != nullptr; }
 
-		void YS_CALL Start(Clock clockNow, Clock clockFrequence) override;
-		void YS_CALL AddLocation(LocationId id, char const* file, int line, char const* function) override;
-		void YS_CALL AddCounter(CounterId id, char const* name) override;
-		void YS_CALL AddZone(ZoneId id, char const* name) override;
-		void YS_CALL IncrementCounter(CounterId id, LocationId loc, uint64_t time, double value) override;
-		void YS_CALL EnterZone(ZoneId id, LocationId loc, uint64_t start, uint16_t depth) override {} // ignore
-		void YS_CALL ExitZone(ZoneId id, uint64_t start, uint64_t ticks, uint16_t depth) override;
-		void YS_CALL Tick(Clock clockNow) override;
-		void YS_CALL Stop(Clock clockNow) override;
+		void YS_CALL BeginProfile(ysTime clockNow, ysTime clockFrequence) override;
+		void YS_CALL EndProfile(ysTime clockNow) override;
+		void YS_CALL AddLocation(ysLocationId id, char const* file, int line, char const* function) override;
+		void YS_CALL AddCounter(ysCounterId id, char const* name) override;
+		void YS_CALL AddZone(ysZoneId id, char const* name) override;
+		void YS_CALL IncrementCounter(ysCounterId id, ysLocationId loc, uint64_t time, double value) override;
+		void YS_CALL RecordZone(ysZoneId id, ysLocationId loc, uint64_t start, uint64_t end) override;
+		void YS_CALL Tick(ysTime clockNow) override;
 	};
 
 	void ProfileFileSink::Flush()
 	{
-		if (m_File != nullptr)
-			fwrite(m_Buffer, m_Cursor, 1, m_File);
-		m_Cursor = 0;
+		if (_file != nullptr)
+			fwrite(_buffer, _cursor, 1, _file);
+		_cursor = 0;
 	}
 
 	void ProfileFileSink::WriteBuffer(void const* bytes, size_t size)
 	{
-		if (m_Buffer != nullptr)
+		if (_buffer != nullptr)
 		{
-			if (m_Cursor + size > m_Capacity)
+			if (_cursor + size > _capacity)
 				Flush();
 
-			std::memcpy(m_Buffer + m_Cursor, bytes, size);
-			m_Cursor += size;
+			std::memcpy(_buffer + _cursor, bytes, size);
+			_cursor += size;
 		}
 	}
 
@@ -82,125 +78,98 @@ namespace
 		WriteBuffer(string, len);
 	}
 
-	void ProfileFileSink::WriteFloat64(double value)
-	{
-		WriteBuffer(&value, sizeof(value));
-	}
-
-	void ProfileFileSink::Write64(uint64_t value)
-	{
-	#if SDL_BIG_ENDIAN
-		value = SDL_SwapLE64(value);
-	#endif
-		WriteBuffer(&value, sizeof(value));
-	}
-
-	void ProfileFileSink::Write32(uint32_t value)
-	{
-	#if SDL_BIG_ENDIAN
-		value = SDL_SwapLE32(value);
-	#endif
-		WriteBuffer(&value, sizeof(value));
-	}
-
-	void ProfileFileSink::Write16(uint16_t value)
-	{
-	#if SDL_BIG_ENDIAN
-		value = SDL_SwapLE16(value);
-	#endif
-		WriteBuffer(&value, sizeof(value));
-	}
-
 	bool ProfileFileSink::OpenFile(char const* fileName)
 	{
-		if (m_File == nullptr)
-			m_File = fopen(fileName, "wb");
+		if (_file == nullptr)
+			_file = fopen(fileName, "wb");
 
-		if (m_File == nullptr)
+		if (_file == nullptr)
 			return false;
 
-		if (m_Buffer == nullptr)
-			m_Buffer = new char[m_Capacity];
+		if (_buffer == nullptr)
+			_buffer = (char*)ysAlloc(_capacity);
 
-		if (m_Buffer == nullptr)
+		if (_buffer == nullptr)
 		{
-			fclose(m_File);
-			m_File = nullptr;
+			fclose(_file);
+			_file = nullptr;
 			return false;
 		}
 
 		return true;
 	}
 
-	void ProfileFileSink::Start(Clock clockNow, Clock clockFrequency)
+	void ProfileFileSink::CloseFile()
+	{
+		Flush();
+
+		if (_file != nullptr)
+			fclose(_file);
+		_file = nullptr;
+
+		ysFree(_buffer);
+		_buffer = nullptr;
+	}
+
+	void ProfileFileSink::BeginProfile(ysTime clockNow, ysTime clockFrequency)
 	{
 		// simple enough header
-		WriteBuffer("PROF0103\n", 8);
+		WriteBuffer("PROF0104", 8);
 		Write64(clockNow);
 		Write64(clockFrequency);
 	}
 
-	void ProfileFileSink::Stop()
+	void ProfileFileSink::EndProfile(ysTime clockNow)
 	{
-		Flush();
-
-		if (m_File != nullptr)
-			fclose(m_File);
-		m_File = nullptr;
-
-		delete[] m_Buffer;
-		m_Buffer = nullptr;
+		Write8('E');
+		Write64(clockNow);
+		CloseFile();
 	}
 
-	bool ProfileFileSink::IsOpen() const
+	void ProfileFileSink::AddLocation(ysLocationId id, char const* file, int line, char const* function)
 	{
-		return m_File != nullptr;
-	}
-
-	void ProfileFileSink::AddLocation(LocationId id, char const* file, int line, char const* function)
-	{
-		Write8(1); // new location header
+		Write8('L'); // new location header
 		WriteId(id);
 		Write16((uint16_t)line);
 		WriteString(file);
 		WriteString(function);
 	}
 
-	void ProfileFileSink::AddCounter(CounterId id, char const* name)
+	void ProfileFileSink::AddCounter(ysCounterId id, char const* name)
 	{
-		Write8(2); // new counter header
+		Write8('C'); // new counter header
 		WriteId(id);
 		WriteString(name);
 	}
 
-	void ProfileFileSink::AddZone(ZoneId id, char const* name)
+	void ProfileFileSink::AddZone(ysZoneId id, char const* name)
 	{
-		Write8(3); // new zone header
+		Write8('Z'); // new zone header
 		WriteId(id);
 		WriteString(name);
 	}
 
-	void ProfileFileSink::IncrementCounter(CounterId id, LocationId loc, uint64_t time, double value)
+	void ProfileFileSink::IncrementCounter(ysCounterId id, ysLocationId loc, ysTime time, double value)
 	{
-		Write8(4); // counter value header
+		Write8('I'); // counter value header
 		WriteId(id);
 		WriteId(loc);
 		Write64(time);
 		WriteFloat64(value);
 	}
 
-	void ProfileFileSink::ExitZone(ZoneId id, uint64_t start, uint64_t ticks, uint16_t depth)
+	void ProfileFileSink::RecordZone(ysZoneId id, ysLocationId loc, ysTime start, ysTime end)
 	{
-		Write8(6); // zone span header
+		Write8('R'); // zone span header
 		WriteId(id);
+		WriteId(loc);
 		Write64(start);
-		Write64(ticks);
-		Write16(depth);
+		Write64(end);
 	}
 
-	void ProfileFileSink::Tick(Clock clockNow)
+	void ProfileFileSink::Tick(ysTime clockNow)
 	{
-		Write8(7); // tick header
+		Write8('T'); // tick header
 		Write64(clockNow);
 	}
 }
