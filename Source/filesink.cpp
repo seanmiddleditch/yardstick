@@ -30,7 +30,7 @@ namespace
 		void Write16(uint16_t value) { WriteBuffer(&value, sizeof(value)); }
 		void Write8(uint8_t value) { WriteBuffer(&value, 1); }
 
-		void WriteId(ysZoneId id) { Write16(static_cast<std::underlying_type_t<ysZoneId>>(id)); }
+		void WriteId(ysRegionId id) { Write16(static_cast<std::underlying_type_t<ysRegionId>>(id)); }
 		void WriteId(ysCounterId id) { Write16(static_cast<std::underlying_type_t<ysCounterId>>(id)); }
 		void WriteId(ysLocationId id) { Write16(static_cast<std::underlying_type_t<ysLocationId>>(id)); }
 
@@ -46,9 +46,9 @@ namespace
 		void YS_CALL EndProfile(ysTime clockNow) override;
 		void YS_CALL AddLocation(ysLocationId id, char const* file, int line, char const* function) override;
 		void YS_CALL AddCounter(ysCounterId id, char const* name) override;
-		void YS_CALL AddZone(ysZoneId id, char const* name) override;
+		void YS_CALL AddRegion(ysRegionId id, char const* name) override;
 		void YS_CALL IncrementCounter(ysCounterId id, ysLocationId loc, uint64_t time, double value) override;
-		void YS_CALL RecordZone(ysZoneId id, ysLocationId loc, uint64_t start, uint64_t end) override;
+		void YS_CALL EmitRegion(ysRegionId id, ysLocationId loc, uint64_t start, uint64_t end) override;
 		void YS_CALL Tick(ysTime clockNow) override;
 	};
 
@@ -142,7 +142,7 @@ namespace
 		WriteString(name);
 	}
 
-	void ProfileFileSink::AddZone(ysZoneId id, char const* name)
+	void ProfileFileSink::AddRegion(ysRegionId id, char const* name)
 	{
 		Write8('Z'); // new zone header
 		WriteId(id);
@@ -158,7 +158,7 @@ namespace
 		WriteFloat64(value);
 	}
 
-	void ProfileFileSink::RecordZone(ysZoneId id, ysLocationId loc, ysTime start, ysTime end)
+	void ProfileFileSink::EmitRegion(ysRegionId id, ysLocationId loc, ysTime start, ysTime end)
 	{
 		Write8('R'); // zone span header
 		WriteId(id);

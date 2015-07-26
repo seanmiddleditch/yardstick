@@ -7,8 +7,7 @@
 #include <atomic>
 #include <cstring>
 #include <vector>
-#include <tuple>
-#include <algorithm>
+#include <mutex>
 
 // we need this on Windows for the default clock
 #if defined(_WIN32)
@@ -28,7 +27,12 @@ namespace
 	};
 
 	// we don't need actually identical locations; we just want to avoid sending strings too much
-	bool operator==(Location const& lhs, Location const& rhs) { return lhs.file == rhs.file && lhs.func == rhs.func && lhs.line == rhs.line; }
+	bool operator==(Location const& lhs, Location const& rhs)
+	{
+		return 0 == std::strcmp(lhs.file, rhs.file) &&
+			0 == std::strcmp(lhs.func, rhs.func) &&
+			lhs.line == rhs.line;
+	}
 
 	/// Default realloc() wrapper.
 	/// @internal
@@ -63,6 +67,26 @@ namespace
 #endif
 	}
 
+	/// Find the index of a value in an array.
+	template <typename T>
+	std::size_t FindValue(T const* first, T const* last, T const& value)
+	{
+		for (T const* it = first; it != last; ++it)
+			if (*it == value)
+				return it - first;
+		return last - first;
+	}
+
+	/// Find the first occurance of a predicate in an array
+	template <typename T, typename Pred>
+	std::size_t FindIf(T const* first, T const* last, Pred const& pred)
+	{
+		for (T const* it = first; it != last; ++it)
+			if (pred(*it))
+				return it - first;
+		return last - first;
+	}
+
 	/// Default sink if none if provided, does nothing
 	/// @internal
 	class NullSink : public ysSink
@@ -72,9 +96,9 @@ namespace
 		void YS_CALL EndProfile(ysTime clockNow) override {}
 		void YS_CALL AddLocation(ysLocationId locatonId, char const* fileName, int line, char const* functionName) override {}
 		void YS_CALL AddCounter(ysCounterId counterId, char const* counterName) override {}
-		void YS_CALL AddZone(ysZoneId zoneId, char const* zoneName) override {}
+		void YS_CALL AddRegion(ysRegionId regionId, char const* zoneName) override {}
 		void YS_CALL IncrementCounter(ysCounterId counterId, ysLocationId locationId, uint64_t clockNow, double value) override {}
-		void YS_CALL RecordZone(ysZoneId zoneId, ysLocationId, ysTime clockStart, uint64_t clockEnd) override {}
+		void YS_CALL EmitRegion(ysRegionId regionId, ysLocationId, ysTime clockStart, uint64_t clockEnd) override {}
 		void YS_CALL Tick(ysTime clockNow) override {}
 	} gNullSink;
 
@@ -89,212 +113,221 @@ namespace
 		void deallocate(T* block, std::size_t);
 	};
 
-	/// An active context.
+	/// Default configuration.
 	/// @internal
-	struct Context final
+	struct DefaultConfiguration : ysConfiguration
 	{
-		ysAllocator allocator = SystemAllocator;
-		ysReadClock readClock = ReadSystemClock;
-		ysReadFrequency readFrequency = ReadSystemFrequency;
-		ysSink* sink = nullptr;
-
-		std::vector<Location, YsAllocator<Location>> locations;
-		std::vector<char const*, YsAllocator<char const*>> counters;
-		std::vector<char const*, YsAllocator<char const*>> zones;
+		DefaultConfiguration()
+		{
+			allocator = SystemAllocator;
+			readClock = ReadSystemClock;
+			readFrequency = ReadSystemFrequency;
+			sink = &gNullSink;
+		}
 	};
 
-	/// The currently active context;
-	/// @internal
-	Context* gContext = nullptr;
+	bool gInitialized = false;
+	bool gCapturing = false;
+	DefaultConfiguration gConfig;
+	ysSink* gActiveSink = &gNullSink;
+	std::vector<Location, YsAllocator<Location>> gLocations;
+	std::vector<char const*, YsAllocator<char const*>> gCounters;
+	std::vector<char const*, YsAllocator<char const*>> gRegions;
+	std::mutex gMutex;
 }
 
 template <typename T>
 T* YsAllocator<T>::allocate(std::size_t count)
 {
-	return static_cast<T*>(gContext->allocator(nullptr, count * sizeof(T)));
+	return static_cast<T*>(gConfig.allocator(nullptr, count * sizeof(T)));
 }
 
 template <typename T>
 void YsAllocator<T>::deallocate(T* block, std::size_t)
 {
-	gContext->allocator(block, 0U);
+	gConfig.allocator(block, 0U);
 }
 
 ysErrorCode YS_API _ysInitialize(ysConfiguration const& config)
 {
+	std::unique_lock<std::mutex> lock(gMutex);
+
 	// only allow initializing once per process
-	if (gContext != nullptr)
-		return ysErrorCode::Duplicate;
-
-	// validate arguments
-	if (config.allocator == nullptr)
-		return ysErrorCode::InvalidParameter;
-	if (config.readClock == nullptr)
-		return ysErrorCode::InvalidParameter;
-	if (config.readFrequency == nullptr)
-		return ysErrorCode::InvalidParameter;
-	if (config.sink == nullptr)
-		return ysErrorCode::InvalidParameter;
-
-	// allocate and initialize the current context
-	auto ctx = new (config.allocator(nullptr, sizeof(Context))) Context();
-	if (ctx == nullptr)
-		return ysErrorCode::ResourcesExhausted;
+	if (gInitialized)
+		return ysErrorCode::AlreadyInitialized;
 
 	// initialize the context with the user's configuration, if any
-	ctx->allocator = config.allocator;
-	ctx->sink = config.sink;
-	ctx->readClock = config.readClock;
-	ctx->readFrequency = config.readFrequency;
+	if (config.allocator != nullptr)
+		gConfig.allocator = config.allocator;
 
-	// install the context
-	gContext = ctx;
+	if (config.sink != nullptr)
+		gConfig.sink = config.sink;
+
+	if (config.readClock != nullptr)
+		gConfig.readClock = config.readClock;
+
+	if (config.readFrequency != nullptr)
+		gConfig.readFrequency = config.readFrequency;
 
 	return ysErrorCode::Success;
 }
 
-void YS_API _ysShutdown()
+ysErrorCode YS_API _ysShutdown()
 {
-	// check the context to ensure it's valid
-	auto ctx = gContext;
-	if (ctx == nullptr)
-		return;
+	// the user possibly didn't bother with StopProfile first
+	_ysStopProfile();
 
-	ctx->locations.clear();
-	ctx->counters.clear();
-	ctx->zones.clear();
+	std::unique_lock<std::mutex> lock(gMutex);
 
-	ctx->locations.shrink_to_fit();
-	ctx->counters.shrink_to_fit();
-	ctx->zones.shrink_to_fit();
+	if (!gInitialized)
+		return ysErrorCode::Uninitialized;
 
-	// release the context
-	gContext->~Context();
-	gContext->allocator(ctx, 0U);
+	// do this first, so checks from here on out "just work"
+	gInitialized = false;
 
-	// mark the global context as 'finalized' so it can never be reallocated.
-	// FIXME: this should be done sooner than later, but the shink_to_fit calls above need gContext to deallocate memory
-	std::memset(&gContext, 0xDD, sizeof(gContext));
+	gLocations.clear();
+	gCounters.clear();
+	gRegions.clear();
+
+	gLocations.shrink_to_fit();
+	gCounters.shrink_to_fit();
+	gRegions.shrink_to_fit();
+
+	// note that we must free memory above before restoring allocator below
+	gConfig = DefaultConfiguration();
+
+	return ysErrorCode::Success;
+}
+
+YS_API ysErrorCode YS_CALL _ysStartProfile()
+{
+	std::unique_lock<std::mutex> lock(gMutex);
+
+	if (!gInitialized)
+		return ysErrorCode::Uninitialized;
+
+	if (gCapturing)
+		return ysErrorCode::AlreadyCapturing;
+
+	gActiveSink = gConfig.sink;
+
+	// notify the sink about all the currently known locations, counters, and regions
+	for (auto const& loc : gLocations)
+		gActiveSink->AddLocation(ysLocationId(&loc - gLocations.data() + 1), loc.file, loc.line, loc.func);
+
+	for (auto const& name : gCounters)
+		gActiveSink->AddCounter(ysCounterId(&name - gCounters.data() + 1), name);
+
+	for (auto const& name : gRegions)
+		gActiveSink->AddRegion(ysRegionId(&name - gRegions.data() + 1), name);
+
+	return ysErrorCode::Success;
+}
+
+YS_API ysErrorCode YS_CALL _ysStopProfile()
+{
+	std::unique_lock<std::mutex> lock(gMutex);
+
+	if (!gCapturing)
+		return ysErrorCode::NotCapturing;
+
+	gActiveSink = &gNullSink;
+	return ysErrorCode::Success;
 }
 
 YS_API void* YS_CALL _ysAlloc(std::size_t size)
 {
-	if (gContext == nullptr)
-		return nullptr;
-
-	return gContext->allocator(nullptr, size);
+	return gConfig.allocator(nullptr, size);
 }
 
-YS_API void* YS_CALL _ysFree(void* ptr)
+YS_API void YS_CALL _ysFree(void* ptr)
 {
-	if (gContext == nullptr)
-		return nullptr;
-
-	return gContext->allocator(ptr, 0);
+	gConfig.allocator(ptr, 0);
 }
 
 YS_API ysLocationId YS_CALL _ysAddLocation(char const* fileName, int line, char const* functionName)
 {
-	// if we have no context, we can't record this location
-	if (gContext == nullptr)
-		return ysLocationId::None;
+	std::unique_lock<std::mutex> lock(gMutex);
+
+	YS_ASSERT(gInitialized, "Cannot register a location without initializing Yardstick first");
 
 	Location const location{ fileName, functionName, line };
 
-	size_t const index = std::find(begin(gContext->locations), end(gContext->locations), location) - begin(gContext->locations);
+	size_t const index = FindValue(gLocations.data(), gLocations.data() + gLocations.size(), location);
 	auto const id = ysLocationId(index + 1);
-	if (index < gContext->locations.size())
+	if (index < gLocations.size())
 		return id;
 
-	gContext->locations.push_back(location);
+	gLocations.push_back(location);
 
-	gContext->sink->AddLocation(id, fileName, line, functionName);
+	gActiveSink->AddLocation(id, fileName, line, functionName);
 
 	return id;
 }
 
 YS_API ysCounterId YS_CALL _ysAddCounter(const char* counterName)
 {
-	// if we have no context, we can't record this location
-	if (gContext == nullptr)
-		return ysCounterId::None;
+	std::unique_lock<std::mutex> lock(gMutex);
+
+	YS_ASSERT(gInitialized, "Cannot register a counter without initializing Yardstick first");
 
 	// this may be a duplicate; return the existing one if so
-	size_t const index = std::find_if(begin(gContext->counters), end(gContext->counters), [=](char const* str){ return std::strcmp(str, counterName) == 0; }) - begin(gContext->counters);
+	size_t const index = FindIf(gCounters.data(), gCounters.data() + gCounters.size(), [=](char const* str){ return std::strcmp(str, counterName) == 0; });
 	auto const id = ysCounterId(index + 1);
-	if (index < gContext->counters.size())
+	if (index < gCounters.size())
 		return id;
 
-	gContext->counters.push_back(counterName);
+	gCounters.push_back(counterName);
 
-	gContext->sink->AddCounter(id, counterName);
-
+	gActiveSink->AddCounter(id, counterName);
+	
 	return id;
 }
 
-YS_API ysZoneId YS_CALL _ysAddZone(const char* zoneName)
+YS_API ysRegionId YS_CALL _ysAddRegion(const char* zoneName)
 {
-	// if we have no context, we can't record this location
-	if (gContext == nullptr)
-		return ysZoneId::None;
+	std::unique_lock<std::mutex> lock(gMutex);
+
+	YS_ASSERT(gInitialized, "Cannot register a region without initializing Yardstick first");
 
 	// this may be a duplicate; return the existing one if so
-	size_t const index = std::find_if(begin(gContext->zones), end(gContext->zones), [=](char const* str){ return std::strcmp(str, zoneName) == 0; }) - begin(gContext->zones);
-	auto const id = ysZoneId(index + 1);
-	if (index < gContext->zones.size())
+	size_t const index = FindIf(gRegions.data(), gRegions.data() + gRegions.size(), [=](char const* str){ return std::strcmp(str, zoneName) == 0; });
+	auto const id = ysRegionId(index + 1);
+	if (index < gRegions.size())
 		return id;
 
-	gContext->zones.push_back(zoneName);
+	gRegions.push_back(zoneName);
 
-	gContext->sink->AddZone(id, zoneName);
+	gActiveSink->AddRegion(id, zoneName);
 
 	return id;
 }
 
 YS_API void YS_CALL _ysIncrementCounter(ysCounterId counterId, ysLocationId locationId, double amount)
 {
-	// if we have no context, we can't record this counter
-	if (gContext == nullptr)
-		return;
-
-	auto const now = gContext->readClock();
-
-	gContext->sink->IncrementCounter(counterId, locationId, now, amount);
+	auto const now = gConfig.readClock();
+	gActiveSink->IncrementCounter(counterId, locationId, now, amount);
 }
 
-YS_API ::ysConfiguration::ysConfiguration() : allocator(SystemAllocator), readClock(ReadSystemClock), readFrequency(ReadSystemFrequency), sink(&gNullSink)
+YS_API void YS_CALL _ysEmitRegion(ysRegionId regionId, ysLocationId locationId, ysTime startTime, ysTime endTime)
 {
+	gActiveSink->EmitRegion(regionId, locationId, startTime, endTime);
 }
 
-YS_API _ysScopedProfileZone::_ysScopedProfileZone(ysZoneId zoneId, ysLocationId locationId) : zoneId(zoneId), locationId(locationId)
+YS_API ysTime YS_CALL _ysReadClock()
 {
-	// if we have no context, we can't record this zone
-	if (gContext == nullptr)
-		return;
-
-	startTime = gContext->readClock();
-}
-
-YS_API _ysScopedProfileZone::~_ysScopedProfileZone()
-{
-	// if we have no context, we can't record this zone exit
-	if (gContext == nullptr)
-		return;
-
-	auto const now = gContext->readClock();
-
-	gContext->sink->RecordZone(zoneId, this->locationId, this->startTime, now);
+	return gConfig.readClock();
 }
 
 YS_API ysErrorCode YS_CALL _ysTick()
 {
 	// can't tick without a context
-	if (gContext == nullptr)
-		return ysErrorCode::UninitializedLibrary;
+	if (!gInitialized)
+		return ysErrorCode::Uninitialized;
 
-	auto const now = gContext->readClock();
+	auto const now = gConfig.readClock();
 
-	gContext->sink->Tick(now);
+	gActiveSink->Tick(now);
 
 	return ysErrorCode::Success;
 }
