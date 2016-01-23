@@ -27,6 +27,9 @@
 #define YS_CAT2(a, b) a##b
 #define YS_CAT(a, b) YS_CAT2(a,b)
 
+/// Helper to ignore values
+#define YS_IGNORE(x) (sizeof((x)))
+
 // ---- Public API ----
 
 #if !defined(YS_ASSERT)
@@ -45,20 +48,12 @@ enum class ysRegionId : std::uint16_t { None = 0 };
 /// Unique handle to a counter.
 enum class ysCounterId : std::uint16_t { None = 0 };
 
-/// Reads the high-resolution timer.
-/// @returns The current timer value, akin to x86 rtdsc.
-using ysReadClock = ysTime(YS_CALL*)();
-
-/// Reads the high-resolution timer's frequency.
-/// @returns The frequency, akin to x86's rtdsc frequency.
-using ysReadFrequency = ysTime(YS_CALL*)();
-
 /// Memory allocation callback.
 /// Follows the rules of realloc(), except that it will only be used to allocate or free.
 using ysAllocator = void*(YS_CALL*)(void* block, std::size_t bytes);
 
-/// Error return codes.
-enum class ysErrorCode : std::uint8_t
+/// Return codes.
+enum class ysResult : std::uint8_t
 {
 	/// Success result.
 	Success,
@@ -82,77 +77,38 @@ enum class ysErrorCode : std::uint8_t
 	AlreadyCapturing,
 };
 
-/// An event sink.
-class ysSink
-{
-protected:
-	ysSink() = default;
-
-public:
-	virtual ~ysSink() = default;
-
-	ysSink(ysSink const&) = delete;
-	ysSink& operator=(ysSink const&) = delete;
-
-	virtual void YS_CALL BeginProfile(ysTime clockNow, ysTime clockFrequency) = 0;
-	virtual void YS_CALL EndProfile(ysTime clockNow) = 0;
-
-	virtual void YS_CALL AddLocation(ysLocationId locatonId, char const* fileName, int line, char const* functionName) = 0;
-	virtual void YS_CALL AddCounter(ysCounterId counterId, char const* counterName) = 0;
-	virtual void YS_CALL AddRegion(ysRegionId regionId, char const* regionName) = 0;
-
-	virtual void YS_CALL IncrementCounter(ysCounterId counterId, ysLocationId locationId, ysTime clockNow, double value) = 0;
-
-	virtual void YS_CALL EmitRegion(ysRegionId regionId, ysLocationId, ysTime clockStart, ysTime clockEnd) = 0;
-
-	virtual void YS_CALL Tick(ysTime clockNow) = 0;
-};
-
-/// Configuration object used to initialize the library.
-struct ysConfiguration
-{
-	void*(YS_CALL* allocator)(void* block, std::size_t bytes) = nullptr;
-	ysTime(YS_CALL* readClock)() = nullptr;
-	ysTime(YS_CALL* readFrequency)() = nullptr;
-	ysSink* sink = nullptr;
-};
-
 // ---- Public Macros ----
 
 #if !defined(NO_YS)
 
-#	define ysInitialize(config) (::_ysInitialize((config)))
-#	define ysShutdown() (::_ysShutdown())
-#	define ysStartProfile() (::_ysStartProfile())
-#	define ysStopProfile() (::_ysStopProfile())
-#	define ysTick() (::_ysTick())
-#	define ysAlloc(size) (::_ysAlloc((size)))
-#	define ysFree(ptr) (::_ysFree((ptr)))
+#	define ysInitialize(config) (::_ys_::initialize((config)))
+#	define ysShutdown() (::_ys_::shutdown())
+#	define ysTick() (::_ys_::emit_tick())
+#	define ysAlloc(size) (::_ys_::alloc((size)))
+#	define ysFree(ptr) (::_ys_::free((ptr)))
 
   /// Marks the current scope as being in a region, and automatically closes the region at the end of the scope.
 #	define ysProfile(name) \
-	static auto const YS_CAT(_ys_region_id, __LINE__) = ::_ysAddRegion(("" name)); \
-	static auto const YS_CAT(_ys_location_id, __LINE__) = ::_ysAddLocation(__FILE__, __LINE__, __FUNCTION__); \
-	::_ysScopedRegion YS_CAT(_ys_region, __LINE__)(YS_CAT(_ys_region_id, __LINE__), YS_CAT(_ys_location_id, __LINE__))
+		static auto const YS_CAT(_ys_region_id, __LINE__) = ::_ys_::add_region(("" name)); \
+		static auto const YS_CAT(_ys_location_id, __LINE__) = ::_ys_::add_location(__FILE__, __LINE__, __FUNCTION__); \
+		::_ys_::ScopedRegion YS_CAT(_ys_region, __LINE__)(YS_CAT(_ys_region_id, __LINE__), YS_CAT(_ys_location_id, __LINE__))
 
 #	define ysCount(name, amount) \
-	do{ \
-		static auto const YS_CAT(_ys_counter_id, __LINE__) = ::_ysAddCounter(("" name)); \
-		static auto const YS_CAT(_ys_location_id, __LINE__) = ::_ysAddLocation(__FILE__, __LINE__, __FUNCTION__); \
-		::_ysIncrementCounter(YS_CAT(_ys_counter_id, __LINE__), YS_CAT(_ys_location_id, __LINE__), (amount)); \
-	}while(false)
+		do{ \
+			static auto const YS_CAT(_ys_counter_id, __LINE__) = ::_ys_::add_counter(("" name)); \
+			static auto const YS_CAT(_ys_location_id, __LINE__) = ::_ys_::add_location(__FILE__, __LINE__, __FUNCTION__); \
+			::_ys_::emit_counter_add(YS_CAT(_ys_counter_id, __LINE__), YS_CAT(_ys_location_id, __LINE__), (amount)); \
+		}while(false)
 
 #else // !defined(NO_YS)
 
-#	define ysInitialize(config) (::ys::ErrorCode::Disabled)
+#	define ysInitialize(allocator) (YS_IGNORE((allocator)),::ys::ErrorCode::Disabled)
 #	define ysShutdown() (::ys::ErrorCode::Disabled)
-#	define ysStartProfile() (::ys::ErrorCode::Disabled)
-#	define ysStopProfile() (::ys::ErrorCode::Disabled)
 #	define ysTick() (::ys::ErrorCode::Disabled)
-#	define ysAlloc(size) (nullptr)
-#	define ysFree(ptr) (::ys::ErrorCode::Disabled)
-#	define ysProfile(name) (::ys::ErrorCode::Disabled)
-#	define ysCount(name, amount) (::ys::ErrorCode::Disabled)
+#	define ysAlloc(size) (YS_IGNORE((size)),nullptr)
+#	define ysFree(ptr) (YS_IGNORE((ptr)),::ys::ErrorCode::Disabled)
+#	define ysProfile(name) do{YS_IGNORE((name));}while(false)
+#	define ysCount(name, amount) do{YS_IGNORE((name));YS_IGNORE((amount));}while(false)
 
 #endif // !defined(NO_YS)
 
@@ -160,76 +116,72 @@ struct ysConfiguration
 
 // ---- Private Implementation ----
 
-/// Initializes the Yardstick library.
-/// Must be called before any other Yardstick function.
-/// @param config Configuration values for the context.
-/// @param sink The sink where all events will be written.
-/// @param readClock Function to read a clock value from the system.
-/// @param readFrequency Function to read a clock frequency from the system.
-/// @returns YS_OK on success, or another value on error.
-YS_API ysErrorCode YS_CALL _ysInitialize(ysConfiguration const& config);
-
-/// Shuts down the Yardstick library and frees any resources.
-/// Yardstick functions cannot be called after this point without reinitializing it.
-YS_API ysErrorCode YS_CALL _ysShutdown();
-
-/// Start capturing a profile if we're not already.
-YS_API ysErrorCode YS_CALL _ysStartProfile();
-
-/// Stop capturing a profile if one is active.
-YS_API ysErrorCode YS_CALL _ysStopProfile();
-
-/// Use the configured allocator to retrieve memory.
-/// @param size Size in bytes of memory to allocate.
-/// @internal
-YS_API void* YS_CALL _ysAlloc(std::size_t size);
-
-/// Use the configured allocator to free memory.
-/// @param ptr Pointer to memory to free
-/// @internal
-YS_API void YS_CALL _ysFree(void* ptr);
-
-/// Call once per frame.
-YS_API ysErrorCode YS_CALL _ysTick();
-
-/// Registers a location to be used for future calls.
-/// @internal
-YS_API ysLocationId YS_CALL _ysAddLocation(char const* fileName, int line, char const* functionName);
-
-/// Registers a counter to be used for future calls.
-/// @internal
-YS_API ysCounterId YS_CALL _ysAddCounter(const char* counterName);
-
-/// Registers a region to be used for future calls.
-/// @internal
-YS_API ysRegionId YS_CALL _ysAddRegion(const char* regionName);
-
-/// Adds a value to a counter.
-/// @internal
-YS_API void YS_CALL _ysIncrementCounter(ysCounterId counterId, ysLocationId locationId, double amount);
-
-/// Emit a region.
-/// @internal
-YS_API void YS_CALL _ysEmitRegion(ysRegionId regionId, ysLocationId locationId, ysTime startTime, ysTime endTime);
-
-/// Read the current clock value.
-/// @internal
-YS_API ysTime YS_CALL _ysReadClock();
-
-/// Managed a scoped region.
-/// @internal
-struct _ysScopedRegion final
+namespace _ys_
 {
-	__forceinline _ysScopedRegion(ysRegionId regionId, ysLocationId locationId) : _regionId(regionId), _locationId(locationId), _startTime(_ysReadClock()) {}
-	__forceinline ~_ysScopedRegion() { _ysEmitRegion(_regionId, _locationId, _startTime, _ysReadClock()); }
 
-	_ysScopedRegion(_ysScopedRegion const&) = delete;
-	_ysScopedRegion& operator=(_ysScopedRegion const&) = delete;
+	/// Initializes the Yardstick library.
+	/// Must be called before any other Yardstick function.
+	/// @param allocator Custom allocator to override the default.
+	/// @returns YS_OK on success, or another value on error.
+	YS_API ysResult YS_CALL initialize(ysAllocator allocator);
 
-	ysRegionId _regionId;
-	ysLocationId _locationId;
-	ysTime _startTime;
-};
+	/// Shuts down the Yardstick library and frees any resources.
+	/// Yardstick functions cannot be called after this point without reinitializing it.
+	YS_API ysResult YS_CALL shutdown();
+
+	/// Use the configured allocator to retrieve memory.
+	/// @param size Size in bytes of memory to allocate.
+	/// @internal
+	YS_API void* YS_CALL alloc(std::size_t size);
+
+	/// Use the configured allocator to free memory.
+	/// @param ptr Pointer to memory to free
+	/// @internal
+	YS_API void YS_CALL free(void* ptr);
+
+	/// Call once per frame.
+	YS_API ysResult YS_CALL emit_tick();
+
+	/// Registers a location to be used for future calls.
+	/// @internal
+	YS_API ysLocationId YS_CALL add_location(char const* fileName, int line, char const* functionName);
+
+	/// Registers a counter to be used for future calls.
+	/// @internal
+	YS_API ysCounterId YS_CALL add_counter(const char* counterName);
+
+	/// Registers a region to be used for future calls.
+	/// @internal
+	YS_API ysRegionId YS_CALL add_region(const char* regionName);
+
+	/// Adds a value to a counter.
+	/// @internal
+	YS_API void YS_CALL emit_counter_add(ysCounterId counterId, ysLocationId locationId, double amount);
+
+	/// Emit a region.
+	/// @internal
+	YS_API void YS_CALL emit_region(ysRegionId regionId, ysLocationId locationId, ysTime startTime, ysTime endTime);
+
+	/// Read the current clock value.
+	/// @internal
+	YS_API ysTime YS_CALL read_clock();
+
+	/// Managed a scoped region.
+	/// @internal
+	struct ScopedRegion final
+	{
+		__forceinline ScopedRegion(ysRegionId regionId, ysLocationId locationId) : _regionId(regionId), _locationId(locationId), _startTime(read_clock()) {}
+		__forceinline ~ScopedRegion() { emit_region(_regionId, _locationId, _startTime, read_clock()); }
+
+		ScopedRegion(ScopedRegion const&) = delete;
+		ScopedRegion& operator=(ScopedRegion const&) = delete;
+
+		ysRegionId _regionId;
+		ysLocationId _locationId;
+		ysTime _startTime;
+	};
+
+} // namespace _ys_
 
 #endif // !defined(NO_YS)
 

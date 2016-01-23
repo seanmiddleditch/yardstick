@@ -7,16 +7,25 @@
 #include <atomic>
 #include <cstring>
 #include <vector>
-#include <mutex>
+#include <type_traits>
 
 // we need this on Windows for the default clock
 #if defined(_WIN32)
 #	define WIN32_LEAN_AND_MEAN
 #	include <windows.h>
+#	define YS_FORCEINLINE __forceinline
+#else
+#	define YS_FORCEINLINE __attribute__((force_inline))
 #endif
 
-namespace
+namespace {
+namespace _internal
 {
+	enum class EProtocol : std::uint8_t
+	{
+		Tick = 0,
+	};
+
 	/// Definition of a location.
 	/// @internal
 	struct Location
@@ -24,52 +33,120 @@ namespace
 		char const* file;
 		char const* func;
 		int line;
+
+		YS_FORCEINLINE bool operator==(Location const& rhs) const;
 	};
 
-	// we don't need actually identical locations; we just want to avoid sending strings too much
-	bool operator==(Location const& lhs, Location const& rhs)
+	/// Allocator using the main context.
+	/// @internal
+	template <typename T>
+	struct StdAllocator
 	{
-		return 0 == std::strcmp(lhs.file, rhs.file) &&
-			0 == std::strcmp(lhs.func, rhs.func) &&
-			lhs.line == rhs.line;
-	}
+		using value_type = T;
+
+		inline T* allocate(std::size_t bytes);
+		inline void deallocate(T* block, std::size_t);
+	};
+
+	using Lock = std::atomic<int>;
+
+	class LockGuard
+	{
+		Lock& _lock;
+
+	public:
+		inline LockGuard(Lock& lock);
+		inline ~LockGuard();
+
+		LockGuard(LockGuard const&) = delete;
+		LockGuard& operator=(LockGuard const&) = delete;
+
+	};
+
+	class Semaphore
+	{
+		std::atomic<int> _count = 0;
+
+	public:
+		Semaphore() = default;
+		Semaphore(Semaphore const&) = delete;
+		Semaphore& operator=(Semaphore const&) = delete;
+
+		bool TryWait(int n = 1);
+		void Wait(int n = 1);
+		void Post(int n = 1);
+	};
+
+	class Buffer
+	{
+		std::uint32_t _size = 0;
+		std::uint8_t _buffer[512 - sizeof(std::uint32_t)];
+
+	public:
+		Buffer() = default;
+
+		std::uint32_t size() const { return _size; }
+		std::uint32_t capacity() const { return sizeof(_buffer); }
+		std::uint32_t available() const { return sizeof(_buffer) - _size; }
+
+		std::uint8_t const* data() const { return _buffer; }
+
+		void write(void const* d, unsigned n) { std::memcpy(_buffer + _size, d, n); _size += n; }
+	};
+
+	template <typename T>
+	class ConcurrentQueue
+	{
+		static_assert(std::is_pod<T>::value, "ConcurrentQueue can only be used for PODs");
+
+		static constexpr std::uint32_t kBufferSize = 512;
+		static constexpr std::uint32_t kBufferMask = kBufferSize - 1;
+
+		std::atomic_uint32_t _sequence[kBufferSize];
+		T _buffer[kBufferSize];
+		std::atomic_uint32_t _enque = 0;
+		std::atomic_uint32_t _deque = 0;
+
+	public:
+		inline ConcurrentQueue();
+		ConcurrentQueue(ConcurrentQueue const&) = delete;
+		ConcurrentQueue& operator=(ConcurrentQueue const&) = delete;
+
+		inline bool TryEnque(T const& value);
+		inline void Enque(T const& value);
+		inline bool TryDeque(T& out);
+	};
 
 	/// Default realloc() wrapper.
 	/// @internal
-	void* YS_CALL SystemAllocator(void* block, std::size_t bytes)
+	void* YS_CALL SystemAllocator(void* block, std::size_t bytes) { return realloc(block, bytes); }
+
+	/// <summary> Writes a message into the outgoing buffer.  </summary>
+	/// <param name="data"> The data. </param>
+	/// <param name="len"> The length. </param>
+	void WriteBuffer(void const* data, unsigned len);
+
+	template <typename T>
+	void Write(T const& value) { WriteBuffer(&value, sizeof(value)); }
+
+	template <typename T, typename... Ts>
+	void Write(T const& value, Ts const&... ts)
 	{
-		return realloc(block, bytes);
+		WriteBuffer(&value, sizeof(value));
+		Write(ts...);
 	}
 
 	/// Default clock tick reader.
 	/// @internal
-	ysTime YS_CALL ReadSystemClock()
-	{
-#if defined(_WIN32) || defined(_WIN64)
-		LARGE_INTEGER tmp;
-		QueryPerformanceCounter(&tmp);
-		return tmp.QuadPart;
-#else
-#		error "Platform unsupported"
-#endif
-	}
+	YS_FORCEINLINE ysTime ReadClock();
 
 	/// Default clock frequency reader.
 	/// @internal
-	ysTime YS_CALL ReadSystemFrequency()
-	{
-#if defined(_WIN32) || defined(_WIN64)
-		LARGE_INTEGER tmp;
-		QueryPerformanceFrequency(&tmp);
-		return tmp.QuadPart;
-#else
-#		error "Platform unsupported"
-#endif
-	}
+	YS_FORCEINLINE ysTime GetClockFrequency();
 
 	/// Find the index of a value in an array.
 	template <typename T>
-	std::size_t FindValue(T const* first, T const* last, T const& value)
+	YS_FORCEINLINE std::size_t FindValue(T const* first, T const* last, T const& value)
 	{
 		for (T const* it = first; it != last; ++it)
 			if (*it == value)
@@ -79,7 +156,7 @@ namespace
 
 	/// Find the first occurance of a predicate in an array
 	template <typename T, typename Pred>
-	std::size_t FindIf(T const* first, T const* last, Pred const& pred)
+	YS_FORCEINLINE std::size_t FindIf(T const* first, T const* last, Pred const& pred)
 	{
 		for (T const* it = first; it != last; ++it)
 			if (pred(*it))
@@ -87,102 +164,189 @@ namespace
 		return last - first;
 	}
 
-	/// Default sink if none if provided, does nothing
-	/// @internal
-	class NullSink : public ysSink
-	{
-	public:
-		void YS_CALL BeginProfile(ysTime clockNow, ysTime clockFrequency) override {}
-		void YS_CALL EndProfile(ysTime clockNow) override {}
-		void YS_CALL AddLocation(ysLocationId locatonId, char const* fileName, int line, char const* functionName) override {}
-		void YS_CALL AddCounter(ysCounterId counterId, char const* counterName) override {}
-		void YS_CALL AddRegion(ysRegionId regionId, char const* zoneName) override {}
-		void YS_CALL IncrementCounter(ysCounterId counterId, ysLocationId locationId, uint64_t clockNow, double value) override {}
-		void YS_CALL EmitRegion(ysRegionId regionId, ysLocationId, ysTime clockStart, uint64_t clockEnd) override {}
-		void YS_CALL Tick(ysTime clockNow) override {}
-	} gNullSink;
+	ysAllocator gAllocator = &SystemAllocator;
 
-	/// Allocator using the main context.
-	/// @internal
-	template <typename T>
-	struct YsAllocator
-	{
-		using value_type = T;
+	Semaphore gBufferCount;
+	ConcurrentQueue<Buffer*> gBufferQueue;
+	ConcurrentQueue<Buffer*> gFreeBuffers;
 
-		T* allocate(std::size_t bytes);
-		void deallocate(T* block, std::size_t);
-	};
+	thread_local Buffer* gtBuffer = nullptr;
 
-	/// Default configuration.
-	/// @internal
-	struct DefaultConfiguration : ysConfiguration
-	{
-		DefaultConfiguration()
-		{
-			allocator = SystemAllocator;
-			readClock = ReadSystemClock;
-			readFrequency = ReadSystemFrequency;
-			sink = &gNullSink;
-		}
-	};
-
+	Lock gGlobalLock;
 	bool gInitialized = false;
-	bool gCapturing = false;
-	DefaultConfiguration gConfig;
-	ysSink* gActiveSink = &gNullSink;
-	std::vector<Location, YsAllocator<Location>> gLocations;
-	std::vector<char const*, YsAllocator<char const*>> gCounters;
-	std::vector<char const*, YsAllocator<char const*>> gRegions;
-	std::mutex gMutex;
+	std::vector<Location, StdAllocator<Location>> gLocations;
+	std::vector<char const*, StdAllocator<char const*>> gCounters;
+	std::vector<char const*, StdAllocator<char const*>> gRegions;
+} // namespace _internal
+} // anonymous namespace
+
+using namespace _internal;
+
+bool _internal::Location::operator==(Location const& rhs) const
+{
+	return line == rhs.line &&
+		0 == std::strcmp(file, rhs.file) &&
+		0 == std::strcmp(func, rhs.func);
 }
 
 template <typename T>
-T* YsAllocator<T>::allocate(std::size_t count)
+T* _internal::StdAllocator<T>::allocate(std::size_t count)
 {
-	return static_cast<T*>(gConfig.allocator(nullptr, count * sizeof(T)));
+	return static_cast<T*>(gAllocator(nullptr, count * sizeof(T)));
 }
 
 template <typename T>
-void YsAllocator<T>::deallocate(T* block, std::size_t)
+void _internal::StdAllocator<T>::deallocate(T* block, std::size_t)
 {
-	gConfig.allocator(block, 0U);
+	gAllocator(block, 0U);
 }
 
-ysErrorCode YS_API _ysInitialize(ysConfiguration const& config)
+_internal::LockGuard::LockGuard(std::atomic<int>& lock) : _lock(lock)
 {
-	std::unique_lock<std::mutex> lock(gMutex);
+	int expected = 0;
+	while (!_lock.compare_exchange_weak(expected, 1, std::memory_order_acquire))
+		expected = 0;
+}
+
+_internal::LockGuard::~LockGuard()
+{
+	_lock.store(0, std::memory_order_release);
+}
+
+bool _internal::Semaphore::TryWait(int n)
+{
+	int c = _count.load(std::memory_order_relaxed);
+	return c >= n && _count.compare_exchange_weak(c, c - n, std::memory_order_acquire);
+}
+
+void _internal::Semaphore::Wait(int n)
+{
+	while (!TryWait(n))
+		;
+}
+
+void _internal::Semaphore::Post(int n)
+{
+	_count.fetch_add(n, std::memory_order_release);
+}
+
+template <typename T>
+_internal::ConcurrentQueue<T>::ConcurrentQueue() 
+{
+	for (std::uint32_t i = 0; i != kBufferSize; ++i)
+		_sequence[i].store(i, std::memory_order_relaxed);
+}
+
+template <typename T>
+bool _internal::ConcurrentQueue<T>::TryEnque(T const& value)
+{
+	std::uint32_t target = _enque.load(std::memory_order_relaxed);
+	std::uint32_t id = _sequence[target & kBufferMask].load(std::memory_order_acquire);
+	std::int32_t delta = id - target;
+
+	while (!(delta == 0 && _enque.compare_exchange_weak(target, target + 1, std::memory_order_relaxed)))
+	{
+		if (delta < 0)
+			return false;
+
+		target = _enque.load(std::memory_order_relaxed);
+		id = _sequence[target & kBufferMask].load(std::memory_order_acquire);
+		delta = id - target;
+	}
+
+	_buffer[target & kBufferMask] = value;
+	_sequence[target & kBufferMask].store(target + 1, std::memory_order_release);
+	return true;
+}
+
+template <typename T>
+void _internal::ConcurrentQueue<T>::Enque(T const& value)
+{
+	while (!TryEnque(value))
+		;
+}
+
+template <typename T>
+bool _internal::ConcurrentQueue<T>::TryDeque(T& out)
+{
+	std::uint32_t target = _enque.load(std::memory_order_relaxed);
+	std::uint32_t id = _sequence[target & kBufferMask].load(std::memory_order_acquire);
+	std::int32_t delta = id - (target + 1);
+
+	while (!(delta == 0 && _deque.compare_exchange_weak(target, target + 1, std::memory_order_relaxed)))
+	{
+		if (delta < 0)
+			return false;
+
+		target = _deque.load(std::memory_order_relaxed);
+		id = _sequence[target & kBufferMask].load(std::memory_order_acquire);
+		delta = id - (target + 1);
+	}
+
+	out = _buffer[target & kBufferMask];
+	_sequence[target & kBufferMask].store(target + kBufferMask + 1, std::memory_order_release);
+	return true;
+}
+
+void _internal::WriteBuffer(void const* data, unsigned len)
+{
+	Buffer* buffer = gtBuffer;
+
+	if (buffer == nullptr || buffer->available() < len)
+	{
+		gBufferQueue.Enque(buffer);
+		if (!gFreeBuffers.TryDeque(buffer))
+			buffer = new (ysAlloc(sizeof(Buffer))) Buffer;
+		gtBuffer = buffer;
+	}
+
+	buffer->write(data, len);
+}
+
+ysTime _internal::ReadClock()
+{
+#if defined(_WIN32) || defined(_WIN64)
+	LARGE_INTEGER tmp;
+	QueryPerformanceCounter(&tmp);
+	return tmp.QuadPart;
+#else
+#		error "Platform unsupported"
+#endif
+}
+
+ysTime _internal::GetClockFrequency()
+{
+#if defined(_WIN32) || defined(_WIN64)
+	LARGE_INTEGER tmp;
+	QueryPerformanceFrequency(&tmp);
+	return tmp.QuadPart;
+#else
+#		error "Platform unsupported"
+#endif
+}
+
+ysResult YS_API _ys_::initialize(ysAllocator allocator)
+{
+	LockGuard _(gGlobalLock);
 
 	// only allow initializing once per process
 	if (gInitialized)
-		return ysErrorCode::AlreadyInitialized;
+		return ysResult::AlreadyInitialized;
 
-	// initialize the context with the user's configuration, if any
-	if (config.allocator != nullptr)
-		gConfig.allocator = config.allocator;
-
-	if (config.sink != nullptr)
-		gConfig.sink = config.sink;
-
-	if (config.readClock != nullptr)
-		gConfig.readClock = config.readClock;
-
-	if (config.readFrequency != nullptr)
-		gConfig.readFrequency = config.readFrequency;
+	if (allocator != nullptr)
+		gAllocator = allocator;
 
 	gInitialized = true;
 
-	return ysErrorCode::Success;
+	return ysResult::Success;
 }
 
-ysErrorCode YS_API _ysShutdown()
+ysResult YS_API _ys_::shutdown()
 {
-	// the user possibly didn't bother with StopProfile first
-	_ysStopProfile();
-
-	std::unique_lock<std::mutex> lock(gMutex);
+	LockGuard _(gGlobalLock);
 
 	if (!gInitialized)
-		return ysErrorCode::Uninitialized;
+		return ysResult::Uninitialized;
 
 	// do this first, so checks from here on out "just work"
 	gInitialized = false;
@@ -195,61 +359,22 @@ ysErrorCode YS_API _ysShutdown()
 	gCounters.shrink_to_fit();
 	gRegions.shrink_to_fit();
 
-	// note that we must free memory above before restoring allocator below
-	gConfig = DefaultConfiguration();
-
-	return ysErrorCode::Success;
+	return ysResult::Success;
 }
 
-YS_API ysErrorCode YS_CALL _ysStartProfile()
+YS_API void* YS_CALL _ys_::alloc(std::size_t size)
 {
-	std::unique_lock<std::mutex> lock(gMutex);
-
-	if (!gInitialized)
-		return ysErrorCode::Uninitialized;
-
-	if (gCapturing)
-		return ysErrorCode::AlreadyCapturing;
-
-	gActiveSink = gConfig.sink;
-
-	// notify the sink about all the currently known locations, counters, and regions
-	for (auto const& loc : gLocations)
-		gActiveSink->AddLocation(ysLocationId(&loc - gLocations.data() + 1), loc.file, loc.line, loc.func);
-
-	for (auto const& name : gCounters)
-		gActiveSink->AddCounter(ysCounterId(&name - gCounters.data() + 1), name);
-
-	for (auto const& name : gRegions)
-		gActiveSink->AddRegion(ysRegionId(&name - gRegions.data() + 1), name);
-
-	return ysErrorCode::Success;
+	return gAllocator(nullptr, size);
 }
 
-YS_API ysErrorCode YS_CALL _ysStopProfile()
+YS_API void YS_CALL _ys_::free(void* ptr)
 {
-	std::unique_lock<std::mutex> lock(gMutex);
-
-	if (!gCapturing)
-		return ysErrorCode::NotCapturing;
-
-	gActiveSink = &gNullSink;
-	return ysErrorCode::Success;
+	gAllocator(ptr, 0);
 }
 
-YS_API void* YS_CALL _ysAlloc(std::size_t size)
+YS_API ysLocationId YS_CALL _ys_::add_location(char const* fileName, int line, char const* functionName)
 {
-	return gConfig.allocator(nullptr, size);
-}
-
-YS_API void YS_CALL _ysFree(void* ptr)
-{
-	gConfig.allocator(ptr, 0);
-}
-
-YS_API ysLocationId YS_CALL _ysAddLocation(char const* fileName, int line, char const* functionName)
-{
-	std::unique_lock<std::mutex> lock(gMutex);
+	LockGuard _(gGlobalLock);
 
 	YS_ASSERT(gInitialized, "Cannot register a location without initializing Yardstick first");
 
@@ -262,14 +387,12 @@ YS_API ysLocationId YS_CALL _ysAddLocation(char const* fileName, int line, char 
 
 	gLocations.push_back(location);
 
-	gActiveSink->AddLocation(id, fileName, line, functionName);
-
 	return id;
 }
 
-YS_API ysCounterId YS_CALL _ysAddCounter(const char* counterName)
+YS_API ysCounterId YS_CALL _ys_::add_counter(const char* counterName)
 {
-	std::unique_lock<std::mutex> lock(gMutex);
+	LockGuard _(gGlobalLock);
 
 	YS_ASSERT(gInitialized, "Cannot register a counter without initializing Yardstick first");
 
@@ -280,15 +403,13 @@ YS_API ysCounterId YS_CALL _ysAddCounter(const char* counterName)
 		return id;
 
 	gCounters.push_back(counterName);
-
-	gActiveSink->AddCounter(id, counterName);
 	
 	return id;
 }
 
-YS_API ysRegionId YS_CALL _ysAddRegion(const char* zoneName)
+YS_API ysRegionId YS_CALL _ys_::add_region(const char* zoneName)
 {
-	std::unique_lock<std::mutex> lock(gMutex);
+	LockGuard _(gGlobalLock);
 
 	YS_ASSERT(gInitialized, "Cannot register a region without initializing Yardstick first");
 
@@ -300,38 +421,34 @@ YS_API ysRegionId YS_CALL _ysAddRegion(const char* zoneName)
 
 	gRegions.push_back(zoneName);
 
-	gActiveSink->AddRegion(id, zoneName);
-
 	return id;
 }
 
-YS_API void YS_CALL _ysIncrementCounter(ysCounterId counterId, ysLocationId locationId, double amount)
+YS_API void YS_CALL _ys_::emit_counter_add(ysCounterId counterId, ysLocationId locationId, double amount)
 {
-	auto const now = gConfig.readClock();
-	gActiveSink->IncrementCounter(counterId, locationId, now, amount);
+	auto const now = ReadClock();
 }
 
-YS_API void YS_CALL _ysEmitRegion(ysRegionId regionId, ysLocationId locationId, ysTime startTime, ysTime endTime)
+YS_API void YS_CALL _ys_::emit_region(ysRegionId regionId, ysLocationId locationId, ysTime startTime, ysTime endTime)
 {
-	gActiveSink->EmitRegion(regionId, locationId, startTime, endTime);
 }
 
-YS_API ysTime YS_CALL _ysReadClock()
+YS_API ysTime YS_CALL _ys_::read_clock()
 {
-	return gConfig.readClock();
+	return ReadClock();
 }
 
-YS_API ysErrorCode YS_CALL _ysTick()
+YS_API ysResult YS_CALL _ys_::emit_tick()
 {
 	// can't tick without a context
 	if (!gInitialized)
-		return ysErrorCode::Uninitialized;
+		return ysResult::Uninitialized;
 
-	auto const now = gConfig.readClock();
+	ysTime const now = ReadClock();
 
-	gActiveSink->Tick(now);
+	Write(EProtocol::Tick, now);
 
-	return ysErrorCode::Success;
+	return ysResult::Success;
 }
 
 #endif // !defined(NO_YS)
