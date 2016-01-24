@@ -2,10 +2,9 @@ cmake_minimum_required(VERSION 3.0)
 
 project(yardstick)
 
-add_library(yardstick SHARED
-	Include/yardstick.h
-	Source/yardstick.cpp
-	Source/filesink.cpp
-)
-target_compile_definitions(yardstick PRIVATE YARDSTICK_EXPORT)
-target_include_directories(yardstick PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/Include")
+set(YS_ROOT ${CMAKE_CURRENT_SOURCE_DIR})
+set(YS_BINDIR ${YS_ROOT}/bin)
+set(YS_LIBDIR ${YS_ROOT}/lib)
+set(YS_INCDIR ${YS_ROOT}/inc)
+
+add_subdirectory(src)

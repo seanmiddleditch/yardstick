@@ -1,4 +1,4 @@
-/* Copyright (C) 2014 Sean Middleditch, all rights reserverd. */
+/* Copyright (C) 2014-2016 Sean Middleditch, all rights reserverd. */
 
 #if !defined(YARDSTICK_H)
 #define YARDSTICK_H
@@ -84,8 +84,6 @@ enum class ysResult : std::uint8_t
 #	define ysInitialize(config) (::_ys_::initialize((config)))
 #	define ysShutdown() (::_ys_::shutdown())
 #	define ysTick() (::_ys_::emit_tick())
-#	define ysAlloc(size) (::_ys_::alloc((size)))
-#	define ysFree(ptr) (::_ys_::free((ptr)))
 
   /// Marks the current scope as being in a region, and automatically closes the region at the end of the scope.
 #	define ysProfile(name) \
@@ -105,8 +103,6 @@ enum class ysResult : std::uint8_t
 #	define ysInitialize(allocator) (YS_IGNORE((allocator)),::ys::ErrorCode::Disabled)
 #	define ysShutdown() (::ys::ErrorCode::Disabled)
 #	define ysTick() (::ys::ErrorCode::Disabled)
-#	define ysAlloc(size) (YS_IGNORE((size)),nullptr)
-#	define ysFree(ptr) (YS_IGNORE((ptr)),::ys::ErrorCode::Disabled)
 #	define ysProfile(name) do{YS_IGNORE((name));}while(false)
 #	define ysCount(name, amount) do{YS_IGNORE((name));YS_IGNORE((amount));}while(false)
 
@@ -128,16 +124,6 @@ namespace _ys_
 	/// Shuts down the Yardstick library and frees any resources.
 	/// Yardstick functions cannot be called after this point without reinitializing it.
 	YS_API ysResult YS_CALL shutdown();
-
-	/// Use the configured allocator to retrieve memory.
-	/// @param size Size in bytes of memory to allocate.
-	/// @internal
-	YS_API void* YS_CALL alloc(std::size_t size);
-
-	/// Use the configured allocator to free memory.
-	/// @param ptr Pointer to memory to free
-	/// @internal
-	YS_API void YS_CALL free(void* ptr);
 
 	/// Call once per frame.
 	YS_API ysResult YS_CALL emit_tick();
