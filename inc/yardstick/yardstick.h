@@ -12,6 +12,7 @@
 /// Configuration macros necessary for shared library exports.
 #if defined(_WIN32)
 #	define YS_CALL __cdecl
+#	define YS_INLINE __forceinline
 #	if defined(YARDSTICK_STATIC)
 #		define YS_API extern
 #	elif defined(YARDSTICK_EXPORT)
@@ -20,7 +21,9 @@
 #		define YS_API __declspec(dllimport)
 #	endif
 #else
-#	error "Unsupported platform"
+#	define YS_CALL
+#	define YS_INLINE __attribute__((always_inline))
+#	define YS_API __attribute__((visibility ("default")))
 #endif
 
 /// Helper needed to concatenate string.
@@ -193,8 +196,8 @@ namespace _ys_
 	/// @internal
 	struct ScopedRegion final
 	{
-		__forceinline ScopedRegion(ysRegionId regionId, ysLocationId locationId) : _regionId(regionId), _locationId(locationId), _startTime(read_clock()) {}
-		__forceinline ~ScopedRegion() { emit_region(_regionId, _locationId, _startTime, read_clock()); }
+		YS_INLINE ScopedRegion(ysRegionId regionId, ysLocationId locationId) : _regionId(regionId), _locationId(locationId), _startTime(read_clock()) {}
+		YS_INLINE ~ScopedRegion() { emit_region(_regionId, _locationId, _startTime, read_clock()); }
 
 		ScopedRegion(ScopedRegion const&) = delete;
 		ScopedRegion& operator=(ScopedRegion const&) = delete;
