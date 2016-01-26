@@ -6,10 +6,10 @@ namespace _ys_ {
 
 class Spinlock
 {
-	AlignedAtomic<int> _state = 0;
+	AlignedAtomic<int> _state;
 
 public:
-	Spinlock() = default;
+	Spinlock() : _state(0) {}
 	Spinlock(Spinlock const&) = delete;
 	Spinlock& operator=(Spinlock const&) = delete;
 

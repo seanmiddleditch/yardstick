@@ -33,7 +33,7 @@ class GlobalState
 
 	Event _signal;
 	Spinlock _globalStateLock;
-	AlignedAtomic<bool> _active = false;
+	AlignedAtomic<bool> _active;
 	std::thread _backgroundThread;
 	Allocator<void> _allocator;
 	Vector<Location> _locations;
@@ -48,7 +48,7 @@ class GlobalState
 	void FlushNetBuffer();
 
 public:
-	GlobalState() : _locations(_allocator), _counters(_allocator), _regions(_allocator), _threads(_allocator) {}
+	GlobalState() : _active(false), _locations(_allocator), _counters(_allocator), _regions(_allocator), _threads(_allocator) {}
 	GlobalState(GlobalState const&) = delete;
 	GlobalState& operator=(GlobalState const&) = delete;
 
