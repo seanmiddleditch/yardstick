@@ -1,7 +1,7 @@
 Yardstick
 =========
 
-Copyright (C) 2014 Sean Middleditch <sean@middleditch.us>
+Copyright (C) 2014-2016 Sean Middleditch <sean@middleditch.us>
 All rights reserved.
 
 Introduction
