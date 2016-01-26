@@ -30,7 +30,7 @@ add_library(yardstick SHARED
 
 set_property(TARGET yardstick PROPERTY DEBUG_POSTFIX "d")
 set_property(TARGET yardstick PROPERTY CXX_STANDARD 11)
-add_definitions(yardstick YARDSTICK_EXPORT)
+target_compile_definitions(yardstick YARDSTICK_EXPORT)
 target_include_directories(yardstick PUBLIC ${YS_INCDIR})
 
 install(TARGETS yardstick
