@@ -2,13 +2,11 @@
 
 #pragma once
 
-#include <atomic>
-
 namespace _ys_ {
 
 class Spinlock
 {
-	std::atomic<int> _state = 0;
+	AlignedAtomic<int> _state = 0;
 
 public:
 	Spinlock() = default;

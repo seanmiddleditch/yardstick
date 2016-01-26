@@ -77,6 +77,37 @@ enum class ysResult : std::uint8_t
 	AlreadyCapturing,
 };
 
+/// Protocol event
+struct ysEvent
+{
+	enum { TypeNone, TypeHeader, TypeTick, TypeRegion, TypeCounter } type;
+	union
+	{
+		struct
+		{
+			ysTime frequency;
+		} header;
+		struct
+		{
+			ysTime when;
+		} tick;
+		struct
+		{
+			ysRegionId id;
+			ysLocationId loc;
+			ysTime begin;
+			ysTime end;
+		} region;
+		struct
+		{
+			ysCounterId id;
+			ysLocationId loc;
+			ysTime when;
+			double amount;
+		} counter;
+	};
+};
+
 // ---- Public Macros ----
 
 #if !defined(NO_YS)
@@ -147,6 +178,12 @@ namespace _ys_
 	/// Emit a region.
 	/// @internal
 	YS_API void YS_CALL emit_region(ysRegionId regionId, ysLocationId locationId, ysTime startTime, ysTime endTime);
+
+	/// Emits an event from the current thread.
+	YS_API ysResult YS_CALL emit_event(ysEvent const& ev);
+
+	/// Parses an event out of a buffer.
+	YS_API ysResult YS_CALL read_event(ysEvent& out_ev, std::size_t& out_len, void const* buffer, std::size_t available);
 
 	/// Read the current clock value.
 	/// @internal

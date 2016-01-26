@@ -5,26 +5,33 @@
 #include "yardstick/yardstick.h"
 
 #include <vector>
+#include <cstdlib>
 
 namespace _ys_ {
 
-void* Allocate(void* ptr, size_t size);
-void SetAllocator(ysAllocator alloc);
-
 template <typename T>
-struct Allocator
+class Allocator
 {
+	ysAllocator _alloc;
+
+	static void* YS_CALL sysalloc(void* block, std::size_t bytes) { return std::realloc(block, bytes); }
+
+public:
 	using value_type = T;
 
-	Allocator() = default;
-	template <class U> Allocator(Allocator<U> const&) {}
+	Allocator() : _alloc(&sysalloc) {}
+	Allocator(ysAllocator alloc) : _alloc(alloc) { if (_alloc == nullptr) _alloc = &sysalloc; }
+	template <typename U> Allocator(Allocator<U> const& rhs) : _alloc(rhs._alloc) {}
 
-	T* allocate(std::size_t count) { return static_cast<T*>(Allocate(nullptr, count * sizeof(T))); }
-	void deallocate(T* block, std::size_t count) { Allocate(block, count * sizeof(T)); }
+	T* allocate(std::size_t count) { return static_cast<T*>(_alloc(nullptr, count * sizeof(T))); }
+	void deallocate(T* block, std::size_t count) { _alloc(block, 0); }
+
+	template <typename U> friend bool operator==(Allocator<T> const& lhs, Allocator<U> const& rhs) { return lhs._alloc == rhs._alloc; }
+	template <typename U> friend bool operator!=(Allocator<T> const& lhs, Allocator<U> const& rhs) { return lhs._alloc != rhs._alloc; }
+
+	template <typename U> friend class Allocator;
 };
 
-template <class T, class U> bool operator==(Allocator<T> const&, Allocator<U> const&) { return true; }
-template <class T, class U> bool operator!=(Allocator<T> const&, Allocator<U> const&) { return true; }
 
 template <typename T>
 using Vector = std::vector<T, Allocator<T>>;

@@ -5,16 +5,20 @@ set(YS_PUBLIC_HEADERS
 set(YS_PRIVATE_HEADERS
 	Algorithm.h
 	Allocator.h
+	Atomics.h
+	Clock.h
 	ConcurrentCircularBuffer.h
 	ConcurrentQueue.h
+	Event.h
 	GlobalState.h
-	Semaphore.h
 	Spinlock.h
+	ThreadState.h
 )
 
 set(YS_SOURCES
-	Allocator.cpp
 	GlobalState.cpp
+	Protocol.cpp
+	ThreadState.cpp
 	yardstick.cpp
 )
 

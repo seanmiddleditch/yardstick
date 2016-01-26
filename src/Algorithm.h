@@ -2,6 +2,8 @@
 
 #pragma once
 
+#include <cstdint>
+
 namespace _ys_ {
 
 /// Find the index of a value in an array.

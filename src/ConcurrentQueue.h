@@ -1,24 +1,27 @@
 /* Copyright (C) 2016 Sean Middleditch, all rights reserverd. */
 
+// http://www.1024cores.net/home/lock-free-algorithms/queues/bounded-mpmc-queue
+
 #pragma once
 
-#include <atomic>
+#include "Atomics.h"
 #include <type_traits>
 
 namespace _ys_ {
 
-template <typename T>
+template <typename T, std::size_t S = 512>
 class ConcurrentQueue
 {
-	static_assert(std::is_pod<T>::value, "ConcurrentQueue can only be used for PODs");
-
-	static constexpr std::uint32_t kBufferSize = 512;
+	static constexpr std::uint32_t kBufferSize = S;
 	static constexpr std::uint32_t kBufferMask = kBufferSize - 1;
 
-	std::atomic_uint32_t _sequence[kBufferSize];
+	static_assert(std::is_pod<T>::value, "ConcurrentQueue can only be used for PODs");
+	static_assert((kBufferSize & kBufferMask) == 0, "ConcurrentQueue size must be a power of 2");
+
+	AlignedAtomicU32 _sequence[kBufferSize];
 	T _buffer[kBufferSize];
-	std::atomic_uint32_t _enque = 0;
-	std::atomic_uint32_t _deque = 0;
+	AlignedAtomicU32 _enque = 0;
+	AlignedAtomicU32 _deque = 0;
 
 public:
 	inline ConcurrentQueue();
@@ -30,15 +33,15 @@ public:
 	inline bool TryDeque(T& out);
 };
 
-template <typename T>
-ConcurrentQueue<T>::ConcurrentQueue() 
+template <typename T, std::size_t S>
+ConcurrentQueue<T, S>::ConcurrentQueue() 
 {
 	for (std::uint32_t i = 0; i != kBufferSize; ++i)
 		_sequence[i].store(i, std::memory_order_relaxed);
 }
 
-template <typename T>
-bool ConcurrentQueue<T>::TryEnque(T const& value)
+template <typename T, std::size_t S>
+bool ConcurrentQueue<T, S>::TryEnque(T const& value)
 {
 	std::uint32_t target = _enque.load(std::memory_order_relaxed);
 	std::uint32_t id = _sequence[target & kBufferMask].load(std::memory_order_acquire);
@@ -59,15 +62,15 @@ bool ConcurrentQueue<T>::TryEnque(T const& value)
 	return true;
 }
 
-template <typename T>
-void ConcurrentQueue<T>::Enque(T const& value)
+template <typename T, std::size_t S>
+void ConcurrentQueue<T, S>::Enque(T const& value)
 {
 	while (!TryEnque(value))
 		;
 }
 
-template <typename T>
-bool ConcurrentQueue<T>::TryDeque(T& out)
+template <typename T, std::size_t S>
+bool ConcurrentQueue<T, S>::TryDeque(T& out)
 {
 	std::uint32_t target = _enque.load(std::memory_order_relaxed);
 	std::uint32_t id = _sequence[target & kBufferMask].load(std::memory_order_acquire);
