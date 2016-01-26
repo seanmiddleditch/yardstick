@@ -5,6 +5,7 @@
 #include "Atomics.h"
 #include <type_traits>
 #include <cstdint>
+#include <cstring>
 
 namespace _ys_ {
 
