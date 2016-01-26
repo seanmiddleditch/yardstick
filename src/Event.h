@@ -47,5 +47,43 @@ void Event::Signal()
 } // namespace _ys_
 
 #else // defined(_WIN32)
-#	error "Unsupported platform"
-#endif
+
+#include <mutex>
+#include <condition_variable>
+#include <chrono>
+
+namespace _ys_ {
+
+class Event
+{
+	std::mutex _mutex;
+	std::condition_variable _cond;
+	std::atomic<int> _ready;
+
+public:
+  Event() : _ready(0) {}
+	~Event() = default;
+
+	Event(Event const&) = delete;
+	Event& operator=(Event const&) = delete;
+
+	inline void Wait(std::uint32_t microseconds);
+	inline void Signal();
+};
+
+void Event::Wait(std::uint32_t microseconds)
+{
+	std::unique_lock<std::mutex> guard(_mutex);
+	_cond.wait_for(guard, std::chrono::microseconds(microseconds), [this](){ return _ready.load(); });
+	_ready = false;
+}
+
+void Event::Signal()
+{
+	_ready = 1;
+	_cond.notify_all();
+}
+
+} // namespace _ys_
+
+#endif // defined(_WIN32)
