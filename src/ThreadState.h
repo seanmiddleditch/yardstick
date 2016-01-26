@@ -29,6 +29,8 @@ class ThreadState
 		write_value(static_cast<char*>(out) + sizeof(value), ts...);
 	}
 
+	void post_write(void const* buffer, std::uint32_t len);
+
 public:
 	ThreadState();
 	~ThreadState();
@@ -49,14 +51,10 @@ public:
 	{
 		char tmp[128];
 		std::uint32_t const size = calculate_size(ts...);
-		YS_ASSERT(size <= sizeof(tmp), "buffer too small");
-		write_value(tmp, ts...);
-
-		void PostThreadBuffer(void const* data, std::uint32_t len, std::thread::id thrd);
-		if (!_buffer.TryWrite(tmp, size))
+		if (size <= sizeof(tmp))
 		{
-			GlobalState::instance().PostThreadBuffer();
-			_buffer.Write(tmp, size);
+			write_value(tmp, ts...);
+			post_write(tmp, size);	
 		}
 	}
 
