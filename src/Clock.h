@@ -10,7 +10,7 @@
 
 namespace _ys_ {
 
-static inline __forceinline ysTime ReadClock()
+static inline YS_INLINE ysTime ReadClock()
 {
 	LARGE_INTEGER tmp;
 	QueryPerformanceCounter(&tmp);
@@ -29,5 +29,24 @@ static inline ysTime GetClockFrequency()
 } // namespace _ys_
 
 #else // _WIN32
-#	error "Unsupported platform"
+
+#include <chrono>
+
+namespace _ys_ {
+
+static inline YS_INLINE ysTime ReadClock()
+{
+	auto const now = std::chrono::high_resolution_clock::now();
+	auto const time = now.time_since_epoch();
+	auto const ns = std::chrono::duration_cast<std::chrono::nanoseconds>(time);
+	return ns.count();
+}
+
+static inline ysTime GetClockFrequency()
+{
+	return std::nano::den;
+}
+
+} // namespace _ys_
+
 #endif
