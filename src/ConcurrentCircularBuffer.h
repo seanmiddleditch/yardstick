@@ -18,11 +18,11 @@ class ConcurrentCircularBuffer
 	static_assert((kBufferSize & kBufferMask) == 0, "ConcurrentCircularBuffer size must be a power of 2");
 
 	std::uint8_t _buffer[kBufferSize];
-	AlignedAtomic<std::uint32_t> _head = 0;
-	AlignedAtomic<std::uint32_t> _tail = 0;
+	AlignedAtomic<std::uint32_t> _head;
+	AlignedAtomic<std::uint32_t> _tail;
 
 public:
-	ConcurrentCircularBuffer() = default;
+	ConcurrentCircularBuffer() : _head(0), _tail(0) {}
 	ConcurrentCircularBuffer(ConcurrentCircularBuffer const&) = delete;
 	ConcurrentCircularBuffer& operator=(ConcurrentCircularBuffer const&) = delete;
 
