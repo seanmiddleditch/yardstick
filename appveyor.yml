@@ -7,7 +7,7 @@ os: Visual Studio 2015
 clone_folder: c:\yardstick
 
 platform: x64
-configuration: Release
+configuration: RelWithDebInfo
 
 build:
   project: INSTALL.vcxproj
