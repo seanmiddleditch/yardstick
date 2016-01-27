@@ -3,13 +3,15 @@ version: 0.0.{build}-{branch}
 skip_tags: true
 
 os: Visual Studio 2015
- 
+
 clone_folder: c:\yardstick
- 
+
 platform: x64
 configuration: Release
-project: INSTALL.vcxproj
- 
+
+build:
+  project: INSTALL.vcxproj
+
 before_build:
   - cd c:\yardstick
   - cmake -G "Visual Studio 14 2015 Win64" -DCMAKE_INSTALL_PREFIX=%P%
