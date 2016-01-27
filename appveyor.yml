@@ -1,4 +1,4 @@
-version: {branch}-{build}
+version: 1.0.{build}
 os: Visual Studio 2015
 configuration: RelWithDebInfo
 platform: x64
