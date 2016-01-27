@@ -34,8 +34,8 @@ target_compile_definitions(yardstick PRIVATE YARDSTICK_EXPORT)
 target_include_directories(yardstick PUBLIC ${YS_INCDIR})
 
 install(TARGETS yardstick
-    RUNTIME DESTINATION ${YS_BINDIR}
-		LIBRARY DESTINATION ${YS_BINDIR}
+    RUNTIME DESTINATION ${YS_BINDIR}/
+	LIBRARY DESTINATION ${YS_BINDIR}
     ARCHIVE DESTINATION ${YS_LIBDIR}
 )
 if(MSVC)
