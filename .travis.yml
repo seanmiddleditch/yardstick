@@ -10,4 +10,4 @@ before_install:
 install:
   - sudo apt-get install cmake cmake-data
 script:
-  - mkdir build && cd build && cmake .. && cmake --build .
+  - cmake . && cmake --build .
