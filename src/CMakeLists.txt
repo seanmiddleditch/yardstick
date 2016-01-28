@@ -22,10 +22,6 @@ set(SOURCES
 	yardstick.cpp
 )
 
-set(MSBUILD_FILES
-	yardstick.targets
-)
-
 add_library(yardstick SHARED
 	${PUBLIC_HEADERS}
 	${PRIVATE_HEADERS}
@@ -38,7 +34,6 @@ target_compile_definitions(yardstick PRIVATE YARDSTICK_EXPORT)
 target_include_directories(yardstick PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 target_include_directories(yardstick PUBLIC ../inc)
 
-install(FILES ${MSBUILD_FILES} DESTINATION ${CMAKE_INSTALL_PREFIX})
 install(FILES ${PUBLIC_HEADERS} DESTINATION ${YS_INCDIR}/yardstick)
 install(TARGETS yardstick
     RUNTIME DESTINATION ${YS_BINDIR}
