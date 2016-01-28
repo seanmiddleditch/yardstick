@@ -6,11 +6,14 @@ configuration:
 platform:
 - x64
 - x86
-clone_folder: c:\yardstick
+clone_folder: c:\source
 before_build:
-- cmd: if "%platform%"=="Win32" cmake -G "Visual Studio 14 2015" -DCMAKE_INSTALL_PREFIX=. ..
-- cmd: if "%platform%"=="x64" cmake -G "Visual Studio 14 2015 Win64" -DCMAKE_INSTALL_PREFIX=. ..
+- cmd: mkdir c:\build
+- cmd: cd c:\build
+- cmd: if "%platform%"=="Win32" cmake -G "Visual Studio 14 2015" -DCMAKE_INSTALL_PREFIX=c:\install c:\source
+- cmd: if "%platform%"=="x64" cmake -G "Visual Studio 14 2015 Win64" -DCMAKE_INSTALL_PREFIX=c:\install c:\source
 after_build:
+- cmd: cd c:\install
 - cmd: 7z a yardstick.zip bin lib inc
 artifacts:
 - path: yardstick.zip
