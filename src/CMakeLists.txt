@@ -1,8 +1,8 @@
-set(YS_PUBLIC_HEADERS
-	${YS_INCDIR}/yardstick/yardstick.h
+set(PUBLIC_HEADERS
+	../inc/yardstick/yardstick.h
 )
 
-set(YS_PRIVATE_HEADERS
+set(PRIVATE_HEADERS
 	Algorithm.h
 	Allocator.h
 	Atomics.h
@@ -15,29 +15,37 @@ set(YS_PRIVATE_HEADERS
 	ThreadState.h
 )
 
-set(YS_SOURCES
+set(SOURCES
 	GlobalState.cpp
 	Protocol.cpp
 	ThreadState.cpp
 	yardstick.cpp
 )
 
+set(MSBUILD_FILES
+	yardstick.targets
+)
+
 add_library(yardstick SHARED
-	${YS_PUBLIC_HEADERS}
-	${YS_PRIVATE_HEADERS}
-	${YS_SOURCES}
+	${PUBLIC_HEADERS}
+	${PRIVATE_HEADERS}
+	${SOURCES}
 )
 
 set_property(TARGET yardstick PROPERTY DEBUG_POSTFIX "d")
 set_property(TARGET yardstick PROPERTY CXX_STANDARD 11)
 target_compile_definitions(yardstick PRIVATE YARDSTICK_EXPORT)
-target_include_directories(yardstick PUBLIC ${YS_INCDIR})
+target_include_directories(yardstick PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_include_directories(yardstick PUBLIC ../inc)
 
+install(FILES ${MSBUILD_FILES} DESTINATION ${CMAKE_INSTALL_PREFIX})
+install(FILES ${PUBLIC_HEADERS} DESTINATION ${YS_INCDIR}/yardstick)
 install(TARGETS yardstick
-    RUNTIME DESTINATION ${YS_BINDIR}/
+    RUNTIME DESTINATION ${YS_BINDIR}
 	LIBRARY DESTINATION ${YS_BINDIR}
     ARCHIVE DESTINATION ${YS_LIBDIR}
 )
 if(MSVC)
 	install(FILES $<TARGET_PDB_FILE:yardstick> DESTINATION ${YS_BINDIR})
 endif(MSVC)
+

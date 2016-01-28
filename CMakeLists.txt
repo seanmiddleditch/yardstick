@@ -3,10 +3,18 @@ cmake_minimum_required(VERSION 3.0)
 project(yardstick)
 
 set(YS_VERSION 0.1.0)
-set(YS_ROOT ${CMAKE_CURRENT_SOURCE_DIR})
-set(YS_BINDIR ${YS_ROOT}/bin)
-set(YS_LIBDIR ${YS_ROOT}/lib)
-set(YS_INCDIR ${YS_ROOT}/inc)
+
+if(WIN32)
+	set(YS_BINDIR bin/${CMAKE_VS_PLATFORM_NAME})
+	set(YS_LIBDIR lib/${CMAKE_VS_PLATFORM_NAME})
+elseif(CMAKE_SIZEOF_VOID_P MATCHES 8)
+	SET(YS_BINDIR bin64)
+	SET(YS_BINDIR lib64)
+else()
+	SET(YS_BINDIR bin)
+	SET(YS_BINDIR lib)
+endif()
+set(YS_INCDIR inc)
 
 add_subdirectory(src)
 
