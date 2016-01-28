@@ -12,6 +12,10 @@ before_build:
 - cmd: cd c:\build
 - cmd: if "%platform%"=="Win32" cmake -G "Visual Studio 14 2015" -DCMAKE_INSTALL_PREFIX=c:\install c:\source
 - cmd: if "%platform%"=="x64" cmake -G "Visual Studio 14 2015 Win64" -DCMAKE_INSTALL_PREFIX=c:\install c:\source
+build:
+  project: INSTALL.vcxproj
+  parallel: true
+  verbosity: minimal
 after_build:
 - cmd: cd c:\install
 - cmd: 7z a yardstick.zip bin lib inc
