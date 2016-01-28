@@ -17,5 +17,3 @@ endif()
 set(YS_INCDIR inc)
 
 add_subdirectory(src)
-
-configure_file(yardstick.nuspec.in yardstick.nuspec @ONLY)
