@@ -66,12 +66,8 @@ enum class ysResult : std::uint8_t
 	Uninitialized,
 	/// Yardstick support has been disabled.
 	Disabled,
-	/// Yardstick is not currently capturing a profile.
-	NotCapturing,
 	/// Yardstick has already been initialized.
 	AlreadyInitialized,
-	/// Yardstick is already capturing a profile.
-	AlreadyCapturing,
 };
 
 /// Protocol event
