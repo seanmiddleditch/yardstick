@@ -103,13 +103,19 @@ struct ysEvent
 	};
 };
 
+using ysCallback = void(YS_CALL*)(ysEvent const& ev, void* userdata);
+
 // ---- Public Macros ----
 
 #if !defined(NO_YS)
 
+#	define ysEnabled() (::ysResult::Success)
 #	define ysInitialize(config) (::_ys_::initialize((config)))
 #	define ysShutdown() (::_ys_::shutdown())
-#	define ysTick() (::_ys_::emit_tick())
+#	define ysTick() (::_ys_::tick())
+#	define ysListen(port) (::_ys_::listen((port)))
+#	define ysAddCallback(callback, userdata) (::_ys_::add_callback((callback), (userdata)))
+#	define ysRemoveCallback(callback, userdata) (::_ys_::remove_callback((callback), (userdata)))
 
   /// Marks the current scope as being in a region, and automatically closes the region at the end of the scope.
 #	define ysProfile(name) \
@@ -120,11 +126,15 @@ struct ysEvent
 
 #else // !defined(NO_YS)
 
-#	define ysInitialize(allocator) (YS_IGNORE((allocator)),::ys::ErrorCode::Disabled)
-#	define ysShutdown() (::ys::ErrorCode::Disabled)
-#	define ysTick() (::ys::ErrorCode::Disabled)
+#	define ysEnabled() (::ysResult::Disabled)
+#	define ysInitialize(allocator) (YS_IGNORE((allocator)),::ysResult::Disabled)
+#	define ysShutdown() (::ysResult::Disabled)
+#	define ysTick() (::ysResult::Disabled)
 #	define ysProfile(name) do{YS_IGNORE((name));}while(false)
-#	define ysCounter(name, value) do{YS_IGNORE((name));YS_IGNORE((value));}while(false)
+#	define ysCounter(name, value) (YS_IGNORE((name)),YS_IGNORE((value)),::ysResult::Disabled)
+#	define ysListen(port) (YS_IGNORE((port)),::ysResult::Disabled)
+#	define ysAddCallback(callback, userdata) (YS_IGNORE((callback)),::ysResult::Disabled)
+#	define ysRemoveCallback(callback, userdata) (YS_IGNORE((callback)),YS_IGNORE((userdata)),::ysResult::Disabled)
 
 #endif // !defined(NO_YS)
 
@@ -146,15 +156,20 @@ namespace _ys_
 	YS_API ysResult YS_CALL shutdown();
 
 	/// Call once per frame.
-	YS_API ysResult YS_CALL emit_tick();
+	YS_API ysResult YS_CALL tick();
+
+	/// <summary> Listens for incoming Yardstick tool connections on the given port.  </summary>
+	/// <param name="port"> The port to listen on. </param>
+	/// <returns> Success or error code. </returns>
+	YS_API ysResult YS_CALL listen(unsigned short port);
 
 	/// Emit a counter.
 	/// @internal
-	YS_API void YS_CALL emit_counter(ysTime when, double value, char const* name, char const* file, int line);
+	YS_API ysResult YS_CALL emit_counter(ysTime when, double value, char const* name, char const* file, int line);
 
 	/// Emit a region.
 	/// @internal
-	YS_API void YS_CALL emit_region(ysTime startTime, ysTime endTime, char const* name, char const* file, int line);
+	YS_API ysResult YS_CALL emit_region(ysTime startTime, ysTime endTime, char const* name, char const* file, int line);
 
 	/// Emits an event from the current thread.
 	YS_API ysResult YS_CALL emit_event(ysEvent const& ev);

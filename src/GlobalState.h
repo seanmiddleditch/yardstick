@@ -8,6 +8,7 @@
 #include "Spinlock.h"
 #include "Event.h"
 #include "ConcurrentCircularBuffer.h"
+#include "WebsocketSink.h"
 
 #include <cstring>
 #include <thread>
@@ -28,6 +29,8 @@ class GlobalState
 	Spinlock _threadsLock;
 	ThreadState* _threads = nullptr;
 
+	WebsocketSink _websocketSink;
+
 	void ThreadMain();
 	void ProcessThread(ThreadState* thread);
 	void WriteThreadSink(std::thread::id thread, void const* bytes, std::uint32_t len);
@@ -42,6 +45,8 @@ public:
 	ysResult Initialize(ysAllocator allocator);
 	bool IsActive() const;
 	ysResult Shutdown();
+
+	ysResult ListenWebsocket(unsigned short port);
 
 	void RegisterThread(ThreadState* thread);
 	void DeregisterThread(ThreadState* thread);

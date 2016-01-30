@@ -36,8 +36,6 @@ ysResult GlobalState::Shutdown()
 	if (!_active.load(std::memory_order_acquire))
 		return ysResult::Uninitialized;
 
-	_allocator = nullptr;
-
 	// wait for background thread to complete
 	_active.store(false, std::memory_order_release);
 	if (_backgroundThread.joinable())
@@ -46,7 +44,19 @@ ysResult GlobalState::Shutdown()
 		_backgroundThread.join();
 	}
 
+	_allocator = nullptr;
+
 	return ysResult::Success;
+}
+
+ysResult GlobalState::ListenWebsocket(unsigned short port)
+{
+	LockGuard guard(_stateLock);
+
+	if (!_active.load(std::memory_order_acquire))
+		return ysResult::Uninitialized;
+
+	return _websocketSink.Listen(port);
 }
 
 void GlobalState::ThreadMain()

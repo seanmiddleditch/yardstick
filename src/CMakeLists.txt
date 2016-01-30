@@ -4,7 +4,6 @@ set(PUBLIC_HEADERS
 
 set(PRIVATE_HEADERS
 	Algorithm.h
-	Allocator.h
 	Atomics.h
 	Clock.h
 	ConcurrentCircularBuffer.h
@@ -13,12 +12,14 @@ set(PRIVATE_HEADERS
 	GlobalState.h
 	Spinlock.h
 	ThreadState.h
+	WebsocketSink.h
 )
 
 set(SOURCES
 	GlobalState.cpp
 	Protocol.cpp
 	ThreadState.cpp
+	WebsocketSink.cpp
 	yardstick.cpp
 )
 
