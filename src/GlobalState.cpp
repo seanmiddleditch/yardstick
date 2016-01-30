@@ -16,7 +16,6 @@ bool GlobalState::Initialize(ysAllocator alloc)
 	{
 		_allocator = allocator;
 		_locations = Vector<Location>(_locations.begin(), _locations.end(), _allocator);
-		_counters = Vector<char const*>(_counters.begin(), _counters.end(), _allocator);
 
 		LockGuard guard2(_threadStateLock);
 		_threads = Vector<ThreadState*>(_threads.begin(), _threads.end(), _allocator);
@@ -43,7 +42,6 @@ void GlobalState::Shutdown()
 
 	_allocator = Allocator<void>();
 	_locations = Vector<Location>(_allocator);
-	_counters = Vector<char const*>(_allocator);
 
 	LockGuard guard2(_threadStateLock);
 	_threads = Vector<ThreadState*>(_allocator);
@@ -79,21 +77,6 @@ ysLocationId GlobalState::RegisterLocation(char const* file, int line)
 		return id;
 
 	_locations.push_back(location);
-
-	return id;
-}
-
-ysCounterId GlobalState::RegisterCounter(char const* name)
-{
-	LockGuard guard(_globalStateLock);
-
-	// this may be a duplicate; return the existing one if so
-	std::size_t const index = FindIf(_counters.data(), _counters.data() + _counters.size(), [=](char const* str){ return std::strcmp(str, name) == 0; });
-	auto const id = ysCounterId(index + 1);
-	if (index < _counters.size())
-		return id;
-
-	_counters.push_back(name);
 
 	return id;
 }

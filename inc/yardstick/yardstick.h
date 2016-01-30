@@ -104,10 +104,11 @@ struct ysEvent
 		} region;
 		struct
 		{
-			ysCounterId id;
-			ysLocationId loc;
+			int line;
+			ysStringHandle name;
+			ysStringHandle file;
 			ysTime when;
-			double amount;
+			double value;
 		} counter;
 	};
 };
@@ -124,12 +125,8 @@ struct ysEvent
 #	define ysProfile(name) \
 		::_ys_::ScopedRegion YS_CAT(_ys_region, __LINE__)(("" name), __FILE__, __LINE__)
 
-#	define ysCount(name, amount) \
-		do{ \
-			static auto const YS_CAT(_ys_counter_id, __LINE__) = ::_ys_::add_counter(("" name)); \
-			static auto const YS_CAT(_ys_location_id, __LINE__) = ::_ys_::add_location(__FILE__, __LINE__); \
-			::_ys_::emit_counter_add(YS_CAT(_ys_counter_id, __LINE__), YS_CAT(_ys_location_id, __LINE__), (amount)); \
-		}while(false)
+#	define ysCounter(name, value) \
+		(::_ys_::emit_counter(::_ys_::read_clock(), (value), ("" name), __FILE__, __LINE__))
 
 #else // !defined(NO_YS)
 
@@ -137,7 +134,7 @@ struct ysEvent
 #	define ysShutdown() (::ys::ErrorCode::Disabled)
 #	define ysTick() (::ys::ErrorCode::Disabled)
 #	define ysProfile(name) do{YS_IGNORE((name));}while(false)
-#	define ysCount(name, amount) do{YS_IGNORE((name));YS_IGNORE((amount));}while(false)
+#	define ysCounter(name, value) do{YS_IGNORE((name));YS_IGNORE((value));}while(false)
 
 #endif // !defined(NO_YS)
 
@@ -165,13 +162,9 @@ namespace _ys_
 	/// @internal
 	YS_API ysLocationId YS_CALL add_location(char const* fileName, int line);
 
-	/// Registers a counter to be used for future calls.
+	/// Emit a counter.
 	/// @internal
-	YS_API ysCounterId YS_CALL add_counter(const char* counterName);
-
-	/// Adds a value to a counter.
-	/// @internal
-	YS_API void YS_CALL emit_counter_add(ysCounterId counterId, ysLocationId locationId, double amount);
+	YS_API void YS_CALL emit_counter(ysTime when, double value, char const* name, char const* file, int line);
 
 	/// Emit a region.
 	/// @internal

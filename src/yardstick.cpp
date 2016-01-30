@@ -24,19 +24,15 @@ YS_API ysLocationId YS_CALL _ys_::add_location(char const* fileName, int line)
 	return GlobalState::instance().RegisterLocation(fileName, line);
 }
 
-YS_API ysCounterId YS_CALL _ys_::add_counter(const char* counterName)
-{
-	return GlobalState::instance().RegisterCounter(counterName);
-}
-
-YS_API void YS_CALL _ys_::emit_counter_add(ysCounterId counterId, ysLocationId locationId, double amount)
+YS_API void YS_CALL _ys_::emit_counter(ysTime when, double value, char const* name, char const* file, int line)
 {
 	ysEvent ev;
 	ev.type = ysEvent::TypeCounter;
-	ev.counter.id = counterId;
-	ev.counter.loc = locationId;
-	ev.counter.when = ReadClock();
-	ev.counter.amount = amount;
+	ev.counter.line = line;
+	ev.counter.name = ysStringHandle(name);
+	ev.counter.file = ysStringHandle(file);
+	ev.counter.when = when;
+	ev.counter.value = value;
 	emit_event(ev);
 }
 

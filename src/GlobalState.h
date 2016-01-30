@@ -25,7 +25,6 @@ class GlobalState
 	std::thread _backgroundThread;
 	Allocator<void> _allocator;
 	Vector<Location> _locations;
-	Vector<char const*> _counters;
 
 	Spinlock _threadStateLock;
 	Vector<ThreadState*> _threads;
@@ -35,7 +34,7 @@ class GlobalState
 	void FlushNetBuffer();
 
 public:
-	GlobalState() : _active(false), _locations(_allocator), _counters(_allocator), _threads(_allocator) {}
+	GlobalState() : _active(false), _locations(_allocator), _threads(_allocator) {}
 	GlobalState(GlobalState const&) = delete;
 	GlobalState& operator=(GlobalState const&) = delete;
 
@@ -45,7 +44,6 @@ public:
 	void Shutdown();
 
 	ysLocationId RegisterLocation(char const* file, int line);
-	ysCounterId RegisterCounter(char const* name);
 
 	void RegisterThread(ThreadState* thread);
 	void DeregisterThread(ThreadState* thread);

@@ -79,10 +79,11 @@ YS_API ysResult YS_CALL _ys_::emit_event(ysEvent const& ev)
 		TRY_WRITE(ev.region.end);
 		break;
 	case ysEvent::TypeCounter:
-		TRY_WRITE(ev.counter.id);
-		TRY_WRITE(ev.counter.loc);
+		TRY_WRITE(ev.counter.line);
+		TRY_WRITE(ev.counter.name);
+		TRY_WRITE(ev.counter.file);
 		TRY_WRITE(ev.counter.when);
-		TRY_WRITE(ev.counter.amount);
+		TRY_WRITE(ev.counter.value);
 		break;
 	}
 
@@ -120,10 +121,11 @@ YS_API ysResult YS_CALL read_event(ysEvent& out_ev, std::size_t& out_len, void c
 		TRY_READ(out_ev.region.end);
 		break;
 	case ysEvent::TypeCounter:
-		TRY_READ(out_ev.counter.id);
-		TRY_READ(out_ev.counter.loc);
+		TRY_READ(out_ev.counter.line);
+		TRY_READ(out_ev.counter.name);
+		TRY_READ(out_ev.counter.file);
 		TRY_READ(out_ev.counter.when);
-		TRY_READ(out_ev.counter.amount);
+		TRY_READ(out_ev.counter.value);
 		break;
 	}
 
