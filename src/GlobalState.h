@@ -17,19 +17,7 @@ class ThreadState;
 
 class GlobalState
 {
-	struct Location
-	{
-		char const* file;
-		char const* func;
-		int line;
-
-		bool operator==(Location const& rhs) const
-		{
-			return line == rhs.line &&
-				0 == std::strcmp(file, rhs.file) &&
-				0 == std::strcmp(func, rhs.func);
-		}
-	};
+	using Location = std::pair<char const*, int>;
 
 	Event _signal;
 	Spinlock _globalStateLock;
@@ -38,7 +26,6 @@ class GlobalState
 	Allocator<void> _allocator;
 	Vector<Location> _locations;
 	Vector<char const*> _counters;
-	Vector<char const*> _regions;
 
 	Spinlock _threadStateLock;
 	Vector<ThreadState*> _threads;
@@ -48,7 +35,7 @@ class GlobalState
 	void FlushNetBuffer();
 
 public:
-	GlobalState() : _active(false), _locations(_allocator), _counters(_allocator), _regions(_allocator), _threads(_allocator) {}
+	GlobalState() : _active(false), _locations(_allocator), _counters(_allocator), _threads(_allocator) {}
 	GlobalState(GlobalState const&) = delete;
 	GlobalState& operator=(GlobalState const&) = delete;
 
@@ -57,9 +44,8 @@ public:
 	bool Initialize(ysAllocator allocator);
 	void Shutdown();
 
-	ysLocationId RegisterLocation(char const* file, int line, char const* function);
+	ysLocationId RegisterLocation(char const* file, int line);
 	ysCounterId RegisterCounter(char const* name);
-	ysRegionId RegisterRegion(char const* name);
 
 	void RegisterThread(ThreadState* thread);
 	void DeregisterThread(ThreadState* thread);

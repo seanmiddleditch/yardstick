@@ -72,8 +72,9 @@ YS_API ysResult YS_CALL _ys_::emit_event(ysEvent const& ev)
 		TRY_WRITE(ev.tick.when);
 		break;
 	case ysEvent::TypeRegion:
-		TRY_WRITE(ev.region.id);
-		TRY_WRITE(ev.region.loc);
+		TRY_WRITE(ev.region.line);
+		TRY_WRITE(ev.region.name);
+		TRY_WRITE(ev.region.file);
 		TRY_WRITE(ev.region.begin);
 		TRY_WRITE(ev.region.end);
 		break;
@@ -112,8 +113,9 @@ YS_API ysResult YS_CALL read_event(ysEvent& out_ev, std::size_t& out_len, void c
 		TRY_READ(out_ev.tick.when);
 		break;
 	case ysEvent::TypeRegion:
-		TRY_READ(out_ev.region.id);
-		TRY_READ(out_ev.region.loc);
+		TRY_READ(out_ev.region.line);
+		TRY_READ(out_ev.region.name);
+		TRY_READ(out_ev.region.file);
 		TRY_READ(out_ev.region.begin);
 		TRY_READ(out_ev.region.end);
 		break;

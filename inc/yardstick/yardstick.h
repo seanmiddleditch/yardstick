@@ -42,11 +42,11 @@
 /// Type returned by the high-resolution timer.
 using ysTime = std::uint64_t;
 
+/// Type used to represent unique string identifiers.
+using ysStringHandle = std::uint64_t;
+
 /// Unique handle to a location.
 enum class ysLocationId : std::uint32_t { None = 0 };
-
-/// Unique handle to a region.
-enum class ysRegionId : std::uint16_t { None = 0 };
 
 /// Unique handle to a counter.
 enum class ysCounterId : std::uint16_t { None = 0 };
@@ -96,8 +96,9 @@ struct ysEvent
 		} tick;
 		struct
 		{
-			ysRegionId id;
-			ysLocationId loc;
+			int line;
+			ysStringHandle name;
+			ysStringHandle file;
 			ysTime begin;
 			ysTime end;
 		} region;
@@ -121,14 +122,12 @@ struct ysEvent
 
   /// Marks the current scope as being in a region, and automatically closes the region at the end of the scope.
 #	define ysProfile(name) \
-		static auto const YS_CAT(_ys_region_id, __LINE__) = ::_ys_::add_region(("" name)); \
-		static auto const YS_CAT(_ys_location_id, __LINE__) = ::_ys_::add_location(__FILE__, __LINE__, __FUNCTION__); \
-		::_ys_::ScopedRegion YS_CAT(_ys_region, __LINE__)(YS_CAT(_ys_region_id, __LINE__), YS_CAT(_ys_location_id, __LINE__))
+		::_ys_::ScopedRegion YS_CAT(_ys_region, __LINE__)(("" name), __FILE__, __LINE__)
 
 #	define ysCount(name, amount) \
 		do{ \
 			static auto const YS_CAT(_ys_counter_id, __LINE__) = ::_ys_::add_counter(("" name)); \
-			static auto const YS_CAT(_ys_location_id, __LINE__) = ::_ys_::add_location(__FILE__, __LINE__, __FUNCTION__); \
+			static auto const YS_CAT(_ys_location_id, __LINE__) = ::_ys_::add_location(__FILE__, __LINE__); \
 			::_ys_::emit_counter_add(YS_CAT(_ys_counter_id, __LINE__), YS_CAT(_ys_location_id, __LINE__), (amount)); \
 		}while(false)
 
@@ -164,15 +163,11 @@ namespace _ys_
 
 	/// Registers a location to be used for future calls.
 	/// @internal
-	YS_API ysLocationId YS_CALL add_location(char const* fileName, int line, char const* functionName);
+	YS_API ysLocationId YS_CALL add_location(char const* fileName, int line);
 
 	/// Registers a counter to be used for future calls.
 	/// @internal
 	YS_API ysCounterId YS_CALL add_counter(const char* counterName);
-
-	/// Registers a region to be used for future calls.
-	/// @internal
-	YS_API ysRegionId YS_CALL add_region(const char* regionName);
 
 	/// Adds a value to a counter.
 	/// @internal
@@ -180,7 +175,7 @@ namespace _ys_
 
 	/// Emit a region.
 	/// @internal
-	YS_API void YS_CALL emit_region(ysRegionId regionId, ysLocationId locationId, ysTime startTime, ysTime endTime);
+	YS_API void YS_CALL emit_region(ysTime startTime, ysTime endTime, char const* name, char const* file, int line);
 
 	/// Emits an event from the current thread.
 	YS_API ysResult YS_CALL emit_event(ysEvent const& ev);
@@ -196,15 +191,16 @@ namespace _ys_
 	/// @internal
 	struct ScopedRegion final
 	{
-		YS_INLINE ScopedRegion(ysRegionId regionId, ysLocationId locationId) : _regionId(regionId), _locationId(locationId), _startTime(read_clock()) {}
-		YS_INLINE ~ScopedRegion() { emit_region(_regionId, _locationId, _startTime, read_clock()); }
+		YS_INLINE ScopedRegion(char const* name, char const* file, int line) : _startTime(read_clock()), _name(name), _file(file), _line(line) {}
+		YS_INLINE ~ScopedRegion() { emit_region(_startTime, read_clock(), _name, _file, _line); }
 
 		ScopedRegion(ScopedRegion const&) = delete;
 		ScopedRegion& operator=(ScopedRegion const&) = delete;
 
-		ysRegionId _regionId;
-		ysLocationId _locationId;
 		ysTime _startTime;
+		char const* _name;
+		char const* _file;
+		int _line;
 	};
 
 } // namespace _ys_

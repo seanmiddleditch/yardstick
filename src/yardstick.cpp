@@ -19,19 +19,14 @@ ysResult YS_API _ys_::shutdown()
 	return ysResult::Success;
 }
 
-YS_API ysLocationId YS_CALL _ys_::add_location(char const* fileName, int line, char const* functionName)
+YS_API ysLocationId YS_CALL _ys_::add_location(char const* fileName, int line)
 {
-	return GlobalState::instance().RegisterLocation(fileName, line, functionName);
+	return GlobalState::instance().RegisterLocation(fileName, line);
 }
 
 YS_API ysCounterId YS_CALL _ys_::add_counter(const char* counterName)
 {
 	return GlobalState::instance().RegisterCounter(counterName);
-}
-
-YS_API ysRegionId YS_CALL _ys_::add_region(const char* zoneName)
-{
-	return GlobalState::instance().RegisterRegion(zoneName);
 }
 
 YS_API void YS_CALL _ys_::emit_counter_add(ysCounterId counterId, ysLocationId locationId, double amount)
@@ -45,12 +40,13 @@ YS_API void YS_CALL _ys_::emit_counter_add(ysCounterId counterId, ysLocationId l
 	emit_event(ev);
 }
 
-YS_API void YS_CALL _ys_::emit_region(ysRegionId regionId, ysLocationId locationId, ysTime startTime, ysTime endTime)
+YS_API void YS_CALL _ys_::emit_region(ysTime startTime, ysTime endTime, char const* name, char const* file, int line)
 {
 	ysEvent ev;
 	ev.type = ysEvent::TypeRegion;
-	ev.region.id = regionId;
-	ev.region.loc = locationId;
+	ev.region.line = line;
+	ev.region.name = ysStringHandle(name);
+	ev.region.file = ysStringHandle(name);
 	ev.region.begin = startTime;
 	ev.region.end = endTime;
 	emit_event(ev);
