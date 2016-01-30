@@ -24,7 +24,6 @@ class GlobalState
 	AlignedAtomic<bool> _active;
 	std::thread _backgroundThread;
 	Allocator<void> _allocator;
-	Vector<Location> _locations;
 
 	Spinlock _threadStateLock;
 	Vector<ThreadState*> _threads;
@@ -34,7 +33,7 @@ class GlobalState
 	void FlushNetBuffer();
 
 public:
-	GlobalState() : _active(false), _locations(_allocator), _threads(_allocator) {}
+	GlobalState() : _active(false), _threads(_allocator) {}
 	GlobalState(GlobalState const&) = delete;
 	GlobalState& operator=(GlobalState const&) = delete;
 
@@ -42,8 +41,6 @@ public:
 
 	bool Initialize(ysAllocator allocator);
 	void Shutdown();
-
-	ysLocationId RegisterLocation(char const* file, int line);
 
 	void RegisterThread(ThreadState* thread);
 	void DeregisterThread(ThreadState* thread);

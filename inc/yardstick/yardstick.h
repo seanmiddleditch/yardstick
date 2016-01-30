@@ -45,12 +45,6 @@ using ysTime = std::uint64_t;
 /// Type used to represent unique string identifiers.
 using ysStringHandle = std::uint64_t;
 
-/// Unique handle to a location.
-enum class ysLocationId : std::uint32_t { None = 0 };
-
-/// Unique handle to a counter.
-enum class ysCounterId : std::uint16_t { None = 0 };
-
 /// Memory allocation callback.
 /// Follows the rules of realloc(), except that it will only be used to allocate or free.
 using ysAllocator = void*(YS_CALL*)(void* block, std::size_t bytes);
@@ -157,10 +151,6 @@ namespace _ys_
 
 	/// Call once per frame.
 	YS_API ysResult YS_CALL emit_tick();
-
-	/// Registers a location to be used for future calls.
-	/// @internal
-	YS_API ysLocationId YS_CALL add_location(char const* fileName, int line);
 
 	/// Emit a counter.
 	/// @internal

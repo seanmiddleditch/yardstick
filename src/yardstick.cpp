@@ -19,11 +19,6 @@ ysResult YS_API _ys_::shutdown()
 	return ysResult::Success;
 }
 
-YS_API ysLocationId YS_CALL _ys_::add_location(char const* fileName, int line)
-{
-	return GlobalState::instance().RegisterLocation(fileName, line);
-}
-
 YS_API void YS_CALL _ys_::emit_counter(ysTime when, double value, char const* name, char const* file, int line)
 {
 	ysEvent ev;

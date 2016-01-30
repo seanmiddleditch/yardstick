@@ -15,7 +15,6 @@ bool GlobalState::Initialize(ysAllocator alloc)
 	if (allocator != _allocator)
 	{
 		_allocator = allocator;
-		_locations = Vector<Location>(_locations.begin(), _locations.end(), _allocator);
 
 		LockGuard guard2(_threadStateLock);
 		_threads = Vector<ThreadState*>(_threads.begin(), _threads.end(), _allocator);
@@ -41,7 +40,6 @@ void GlobalState::Shutdown()
 	}
 
 	_allocator = Allocator<void>();
-	_locations = Vector<Location>(_allocator);
 
 	LockGuard guard2(_threadStateLock);
 	_threads = Vector<ThreadState*>(_allocator);
@@ -63,22 +61,6 @@ void GlobalState::ProcessThread(ThreadState* thread)
 {
 	char tmp[1024];
 	int const len = thread->Read(tmp, sizeof(tmp));
-}
-
-ysLocationId GlobalState::RegisterLocation(char const* file, int line)
-{
-	LockGuard guard(_globalStateLock);
-
-	Location const location{ file, line };
-
-	std::size_t const index = FindValue(_locations.data(), _locations.data() + _locations.size(), location);
-	auto const id = ysLocationId(index + 1);
-	if (index < _locations.size())
-		return id;
-
-	_locations.push_back(location);
-
-	return id;
 }
 
 void GlobalState::RegisterThread(ThreadState* thread)
