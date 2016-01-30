@@ -1,6 +1,5 @@
 // Copyright (C) 2014-2016 Sean Middleditch, all rights reserverd.
 
-#include "Allocator.h"
 #include "GlobalState.h"
 #include "ThreadState.h"
 #include "Clock.h"

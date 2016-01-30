@@ -2,9 +2,10 @@
 
 #pragma once
 
+#include <yardstick/yardstick.h>
+
 #include "Atomics.h"
 #include "Spinlock.h"
-#include "Allocator.h"
 #include "Event.h"
 #include "ConcurrentCircularBuffer.h"
 
@@ -17,20 +18,19 @@ class ThreadState;
 
 class GlobalState
 {
-	using Location = std::pair<char const*, int>;
-
 	Event _signal;
-	Spinlock _globalStateLock;
 	AlignedAtomic<bool> _active;
-	std::thread _backgroundThread;
-	Allocator<void> _allocator;
 
-	Spinlock _threadStateLock;
+	Spinlock _stateLock;
+	std::thread _backgroundThread;
+	ysAllocator _allocator;
+
+	Spinlock _threadsLock;
 	ThreadState* _threads = nullptr;
 
 	void ThreadMain();
 	void ProcessThread(ThreadState* thread);
-	void FlushNetBuffer();
+	void WriteThreadSink(std::thread::id thread, void const* bytes, std::uint32_t len);
 
 public:
 	GlobalState() : _active(false) {}
@@ -39,9 +39,9 @@ public:
 
 	inline static GlobalState& instance();
 
-	bool Initialize(ysAllocator allocator);
-	bool IsActive() const { return _active.load(std::memory_order_relaxed); }
-	void Shutdown();
+	ysResult Initialize(ysAllocator allocator);
+	bool IsActive() const;
+	ysResult Shutdown();
 
 	void RegisterThread(ThreadState* thread);
 	void DeregisterThread(ThreadState* thread);
