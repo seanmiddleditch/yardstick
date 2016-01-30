@@ -27,7 +27,6 @@ public:
 	ConcurrentCircularBuffer& operator=(ConcurrentCircularBuffer const&) = delete;
 
 	bool TryWrite(void const* data, std::uint32_t size);
-	inline void Write(void const* data, std::uint32_t size);
 	int Read(void* out, std::uint32_t max);
 };
 
@@ -64,13 +63,6 @@ bool ConcurrentCircularBuffer<S>::TryWrite(void const* data, std::uint32_t size)
 	{
 		return false;
 	}
-}
-
-template <std::uint32_t S>
-void ConcurrentCircularBuffer<S>::Write(void const* data, std::uint32_t size)
-{
-	while (!TryWrite(data, size))
-		;
 }
 
 template <std::uint32_t S>

@@ -54,7 +54,7 @@ YS_API ysResult YS_CALL _ys_::emit_event(ysEvent const& ev)
 {
 	char storage[64];
 	void* buffer = storage;
-	std::size_t available = sizeof(buffer);
+	std::size_t available = sizeof(storage);
 
 	ThreadState& thrd = ThreadState::thread_instance();
 
@@ -87,7 +87,7 @@ YS_API ysResult YS_CALL _ys_::emit_event(ysEvent const& ev)
 		break;
 	}
 
-	GlobalState::instance().PostThreadBuffer();
+	thrd.Write(buffer, static_cast<std::uint32_t>(sizeof(storage) - available));
 
 	return ysResult::Success;
 }

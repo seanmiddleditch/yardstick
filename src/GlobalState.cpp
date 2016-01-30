@@ -57,6 +57,10 @@ void GlobalState::ProcessThread(ThreadState* thread)
 {
 	char tmp[1024];
 	int const len = thread->Read(tmp, sizeof(tmp));
+	if (len != 0)
+	{
+
+	}
 }
 
 void GlobalState::RegisterThread(ThreadState* thread)
@@ -65,7 +69,7 @@ void GlobalState::RegisterThread(ThreadState* thread)
 
 	thread->_next = _threads;
 	if (_threads != nullptr)
-		_threads->_prev = thread;
+		_threads->_next = thread;
 	_threads = thread;
 }
 

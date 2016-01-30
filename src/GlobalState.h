@@ -40,6 +40,7 @@ public:
 	inline static GlobalState& instance();
 
 	bool Initialize(ysAllocator allocator);
+	bool IsActive() const { return _active.load(std::memory_order_relaxed); }
 	void Shutdown();
 
 	void RegisterThread(ThreadState* thread);

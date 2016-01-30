@@ -34,8 +34,6 @@ class ThreadState
 		write_value(static_cast<char*>(out) + sizeof(value), ts...);
 	}
 
-	void post_write(void const* buffer, std::uint32_t len);
-
 public:
 	ThreadState();
 	~ThreadState();
@@ -51,17 +49,7 @@ public:
 
 	std::thread::id const& GetThreadId() const { return _thread; }
 
-	template <typename... Ts>
-	void Write(Ts const&... ts)
-	{
-		char tmp[128];
-		std::uint32_t const size = calculate_size(ts...);
-		if (size <= sizeof(tmp))
-		{
-			write_value(tmp, ts...);
-			post_write(tmp, size);	
-		}
-	}
+	void Write(void const* bytes, std::uint32_t len);
 
 	std::uint32_t Read(void* out, std::uint32_t max)
 	{

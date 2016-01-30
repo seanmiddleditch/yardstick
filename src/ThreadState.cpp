@@ -15,11 +15,14 @@ ThreadState::~ThreadState()
 	GlobalState::instance().DeregisterThread(this);
 }
 
-void ThreadState::post_write(void const* buffer, std::uint32_t len)
+void ThreadState::Write(void const* buffer, std::uint32_t len)
 {
-	if (!_buffer.TryWrite(buffer, len))
+	GlobalState& gs = GlobalState::instance();
+
+	if (gs.IsActive() && !_buffer.TryWrite(buffer, len))
 	{
-		GlobalState::instance().PostThreadBuffer();
-		_buffer.Write(buffer, len);
+		gs.PostThreadBuffer();
+		while (gs.IsActive() && !_buffer.TryWrite(buffer, len))
+			; // keep trying to submit until we succeed or we detect that Yardstick has shutdown
 	}
 }
