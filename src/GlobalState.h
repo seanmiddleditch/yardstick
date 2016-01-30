@@ -26,14 +26,14 @@ class GlobalState
 	Allocator<void> _allocator;
 
 	Spinlock _threadStateLock;
-	Vector<ThreadState*> _threads;
+	ThreadState* _threads = nullptr;
 
 	void ThreadMain();
 	void ProcessThread(ThreadState* thread);
 	void FlushNetBuffer();
 
 public:
-	GlobalState() : _active(false), _threads(_allocator) {}
+	GlobalState() : _active(false) {}
 	GlobalState(GlobalState const&) = delete;
 	GlobalState& operator=(GlobalState const&) = delete;
 

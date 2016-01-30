@@ -13,6 +13,11 @@ class ThreadState
 	ConcurrentCircularBuffer<> _buffer;
 	std::thread::id _thread;
 
+	// managed by GlobalState _only_!!!
+	ThreadState* _prev = nullptr;
+	ThreadState* _next = nullptr;
+	friend class GlobalState;
+
 	template <typename T>
 	static std::uint32_t calculate_size(T const& value) { return sizeof(value); }
 

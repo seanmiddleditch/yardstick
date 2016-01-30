@@ -17,7 +17,6 @@ bool GlobalState::Initialize(ysAllocator alloc)
 		_allocator = allocator;
 
 		LockGuard guard2(_threadStateLock);
-		_threads = Vector<ThreadState*>(_threads.begin(), _threads.end(), _allocator);
 	}
 
 	// activate the system if not already
@@ -40,9 +39,6 @@ void GlobalState::Shutdown()
 	}
 
 	_allocator = Allocator<void>();
-
-	LockGuard guard2(_threadStateLock);
-	_threads = Vector<ThreadState*>(_allocator);
 }
 
 void GlobalState::ThreadMain()
@@ -52,7 +48,7 @@ void GlobalState::ThreadMain()
 		_signal.Wait(100);
 
 		LockGuard guard(_threadStateLock);
-		for (ThreadState* thread : _threads)
+		for (ThreadState* thread = _threads; thread != nullptr; thread = thread->_next)
 			ProcessThread(thread);
 	}
 }
@@ -67,16 +63,22 @@ void GlobalState::RegisterThread(ThreadState* thread)
 {
 	LockGuard guard(_threadStateLock);
 
-	_threads.push_back(thread);
+	thread->_next = _threads;
+	if (_threads != nullptr)
+		_threads->_prev = thread;
+	_threads = thread;
 }
 
 void GlobalState::DeregisterThread(ThreadState* thread)
 {
 	LockGuard guard(_threadStateLock);
 
-	std::size_t const index = FindValue(_threads.data(), _threads.data() + _threads.size(), thread);
-	if (index < _threads.size())
-		_threads.erase(_threads.begin() + index);
+	if (thread->_next != nullptr)
+		thread->_next->_prev = thread->_prev;
+	if (thread->_prev != nullptr)
+		thread->_prev->_next = thread->_next;
+	if (_threads == thread)
+		_threads = _threads->_next;
 }
 
 void GlobalState::PostThreadBuffer()
