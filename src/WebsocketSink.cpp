@@ -7,6 +7,7 @@ using namespace _ys_;
 ysResult WebsocketSink::Listen(unsigned short port)
 {
 	Close();
+
 	return ysResult::Success;
 }
 

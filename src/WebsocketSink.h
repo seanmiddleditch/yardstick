@@ -5,6 +5,7 @@
 #include <yardstick/yardstick.h>
 
 #include "ConcurrentCircularBuffer.h"
+#include "webby/webby.h"
 
 namespace _ys_ {
 
