@@ -10,6 +10,7 @@ set(PRIVATE_HEADERS
 	ConcurrentQueue.h
 	Event.h
 	GlobalState.h
+	PointerHash.h
 	Spinlock.h
 	ThreadState.h
 	WebsocketSink.h
