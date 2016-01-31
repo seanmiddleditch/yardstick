@@ -3,7 +3,13 @@
 	<head>
 		<title>Yardstick</title>
 		<script src="js/ys.js" type="text/javascript"></script>
-		<script type="text/javascript">window.onload = function(){ Ys.connect(5760); }</script>
+		<script src="js/ysView.js" type="text/javascript"></script>
+		<script type="text/javascript">
+			window.onload = function(){
+				var ys = new Ys(); ys.connect(5760);
+				var ysView = new YsView(ys);
+			}
+		</script>
 	</head>
 	<body>
 		<div><b>Timers</b></div>
