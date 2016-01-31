@@ -10,7 +10,7 @@ namespace _ys_ {
 
 class ThreadState
 {
-	ConcurrentCircularBuffer<> _buffer;
+	ConcurrentCircularBuffer<4096> _buffer;
 	std::thread::id _thread;
 
 	// managed by GlobalState _only_!!!
