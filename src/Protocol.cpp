@@ -25,15 +25,13 @@ bool read(T& out_value, std::size_t& inout_len, void const*& inout_buffer, std::
 }
 
 template <typename T>
-bool write(T const& value, void*& inout_buffer, std::size_t& inout_available)
+bool write(T const& value, char* buffer, std::size_t available, std::size_t& out_written)
 {
-	if (sizeof(value) > inout_available)
+	if (sizeof(value) > available - out_written)
 		return false;
 
-	std::memcpy(inout_buffer, &value, sizeof(value));
-
-	reinterpret_cast<char*&>(inout_buffer) += sizeof(value);
-	inout_available -= sizeof(value);
+	std::memcpy(buffer + out_written, &value, sizeof(value));
+	out_written += sizeof(value);
 
 	return true;
 }
@@ -46,17 +44,31 @@ bool write(T const& value, void*& inout_buffer, std::size_t& inout_available)
 #if defined(TRY_WRITE)
 #	undef TRY_WRITE
 #endif
-#define TRY_WRITE(value) do{ if (!write((value), buffer, available)) return ysResult::NoMemory; }while(false)
+#define TRY_WRITE(value) do{ if (!write((value), static_cast<char*>(out_buffer), bufLen, out_length)) return ysResult::NoMemory; }while(false)
 
 } // anonymous namespace
 
 YS_API ysResult YS_CALL _ys_::emit_event(ysEvent const& ev)
 {
 	char storage[64];
-	void* buffer = storage;
-	std::size_t available = sizeof(storage);
+	std::size_t length;
+	ysResult rs = write_event(storage, sizeof(storage), ev, length);
 
-	ThreadState& thrd = ThreadState::thread_instance();
+	if (rs == ysResult::Success)
+	{
+		ThreadState& thrd = ThreadState::thread_instance();
+		thrd.Write(storage, static_cast<std::uint32_t>(length));
+		return ysResult::Success;
+	}
+	else
+	{
+		return rs;
+	}
+}
+
+YS_API ysResult YS_CALL _ys_::write_event(void* out_buffer, std::size_t bufLen, ysEvent const& ev, std::size_t& out_length)
+{
+	out_length = 0;
 
 	std::uint8_t const type = static_cast<std::uint8_t>(ev.type);
 	TRY_WRITE(type);
@@ -86,8 +98,6 @@ YS_API ysResult YS_CALL _ys_::emit_event(ysEvent const& ev)
 		TRY_WRITE(ev.counter.value);
 		break;
 	}
-
-	thrd.Write(buffer, static_cast<std::uint32_t>(sizeof(storage) - available));
 
 	return ysResult::Success;
 }
