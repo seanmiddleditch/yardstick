@@ -3,7 +3,7 @@ SET(HTML
 )
 
 SET(JAVASCRIPT
-	src/ys.js
+	js/ys.js
 )
 
 set(YS_WEBTOOLDIR ${YS_TOOLSDIR}/web)
