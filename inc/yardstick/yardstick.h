@@ -43,7 +43,7 @@
 using ysTime = std::uint64_t;
 
 /// Type used to represent unique string identifiers.
-using ysStringHandle = std::uint64_t;
+using ysStringHandle = std::uint32_t;
 
 /// Memory allocation callback.
 /// Follows the rules of realloc(), except that it will only be used to allocate or free.
@@ -73,7 +73,7 @@ enum class ysResult : std::uint8_t
 /// Protocol event
 struct ysEvent
 {
-	enum { TypeNone, TypeHeader, TypeTick, TypeRegion, TypeCounter } type;
+	enum { TypeNone = 0, TypeHeader = 1, TypeTick = 2, TypeRegion = 3, TypeCounter = 4 } type;
 	union
 	{
 		struct
@@ -86,7 +86,7 @@ struct ysEvent
 		} tick;
 		struct
 		{
-			int line;
+			std::uint32_t line;
 			ysStringHandle name;
 			ysStringHandle file;
 			ysTime begin;
@@ -94,7 +94,7 @@ struct ysEvent
 		} region;
 		struct
 		{
-			int line;
+			std::uint32_t line;
 			ysStringHandle name;
 			ysStringHandle file;
 			ysTime when;
@@ -173,6 +173,14 @@ namespace _ys_
 
 	/// Emits an event from the current thread.
 	YS_API ysResult YS_CALL emit_event(ysEvent const& ev);
+
+	/// <summary> Writes an event into a buffer. </summary>
+	/// <param name="out_buffer"> [in,out] The position of a buffer to write the event into. </param>
+	/// <param name="bufLen"> Length of the buffer from the given position. </param>
+	/// <param name="ev"> The evevent to be written. </param>
+	/// <param name="out_length"> [in,out] Number of bytes written into the buffer. </param>
+	/// <returns> ysResult::NoMemory if the buffer is not big enough, otherwise ysResult::Success. </returns>
+	YS_API ysResult YS_CALL write_event(void* out_buffer, std::size_t bufLen, ysEvent const& ev, std::size_t& out_length);
 
 	/// Parses an event out of a buffer.
 	YS_API ysResult YS_CALL read_event(ysEvent& out_ev, std::size_t& out_len, void const* buffer, std::size_t available);

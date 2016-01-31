@@ -15,5 +15,7 @@ else()
 	SET(YS_BINDIR lib)
 endif()
 set(YS_INCDIR inc)
+set(YS_TOOLSDIR tools)
 
 add_subdirectory(src)
+add_subdirectory(tools)

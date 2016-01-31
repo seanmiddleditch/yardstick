@@ -11,6 +11,9 @@ ysResult GlobalState::Initialize(ysAllocator alloc)
 	if (_active.load(std::memory_order_acquire))
 		return ysResult::AlreadyInitialized;
 
+	if (alloc == nullptr)
+		return ysResult::InvalidParameter;
+
 	LockGuard guard(_stateLock);
 	_allocator = alloc;
 
@@ -56,7 +59,7 @@ ysResult GlobalState::ListenWebsocket(unsigned short port)
 	if (!_active.load(std::memory_order_acquire))
 		return ysResult::Uninitialized;
 
-	return _websocketSink.Listen(port);
+	return _websocketSink.Listen(port, _allocator);
 }
 
 void GlobalState::ThreadMain()
@@ -68,12 +71,14 @@ void GlobalState::ThreadMain()
 		LockGuard guard(_threadsLock);
 		for (ThreadState* thread = _threads; thread != nullptr; thread = thread->_next)
 			ProcessThread(thread);
+
+		_websocketSink.Update();
 	}
 }
 
 void GlobalState::ProcessThread(ThreadState* thread)
 {
-	char tmp[1024];
+	char tmp[4096];
 	int const len = thread->Read(tmp, sizeof(tmp));
 	if (len != 0)
 		WriteThreadSink(thread->GetThreadId(), tmp, len);
@@ -81,7 +86,10 @@ void GlobalState::ProcessThread(ThreadState* thread)
 
 void GlobalState::WriteThreadSink(std::thread::id thread, void const* bytes, std::uint32_t len)
 {
-
+	//void const* buffers[] = { &thread, bytes };
+	//std::uint32_t const sizes[] = { static_cast<std::uint32_t>(sizeof(thread)), len };
+	//_websocketSink.WriteEventStream(2, buffers, sizes);
+	_websocketSink.WriteEventStream(1, &bytes, &len);
 }
 
 void GlobalState::RegisterThread(ThreadState* thread)
