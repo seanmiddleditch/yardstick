@@ -152,6 +152,11 @@ struct WebbyServerConfig
    * Return non-zero to close the connection.
    */
   int (*ws_frame)(struct WebbyConnection *connection, const struct WebbyWsFrame *frame);
+
+  /*
+   * This is set as the initial user_data for WebbyConnection.
+   */
+  void *user_data;
 };
 
 /* Returns the amount of memory needed for the specified config. */

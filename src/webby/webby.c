@@ -96,6 +96,7 @@ struct WebbyServer
   webby_socket_t            socket;
   int                       connection_count;
   struct WebbyConnectionPrv connections[1];
+  void                     *user_data;
 };
 
 static void dbg(struct WebbyServer *srv, const char *fmt, ...)
@@ -479,6 +480,8 @@ WebbyServerInit(struct WebbyServerConfig *config, void *memory, size_t memory_si
 
     server->connections[i].io_buf.data = buffer;
     buffer += config->io_buffer_size;
+
+    server->connections[i].public_data.user_data = server->config.user_data;
   }
 
   assert((size_t)(buffer - (unsigned char*) memory) <= memory_size);
@@ -586,7 +589,7 @@ static void reset_connection(struct WebbyServer *srv, struct WebbyConnectionPrv 
   conn->continue_data_left    = 0;
   conn->body_bytes_read       = 0;
   conn->state                 = WBC_REQUEST;
-  conn->public_data.user_data = NULL;
+  conn->public_data.user_data = srv->config.user_data;
   conn->blocking_count        = 0;
 }
 
@@ -1325,7 +1328,7 @@ WebbyServerUpdate(struct WebbyServer *srv)
   }
 
   timeout.tv_sec = 0;
-  timeout.tv_usec = 5;
+  timeout.tv_usec = 0;
 
   err = select((int) (max_socket + 1), &read_fds, &write_fds, &except_fds, &timeout);
 
