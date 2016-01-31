@@ -21,7 +21,9 @@ WebsocketSink::WebsocketSink()
 
 WebsocketSink::~WebsocketSink()
 {
+#if defined(_WIN32)
 	WSACleanup();
+#endif
 }
 
 void WebsocketSink::webby_log(const char* text)
