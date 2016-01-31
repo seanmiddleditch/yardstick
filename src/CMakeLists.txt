@@ -58,4 +58,3 @@ if(MSVC)
 	target_link_libraries(yardstick PUBLIC ws2_32)
 	install(FILES $<TARGET_PDB_FILE:yardstick> DESTINATION ${YS_BINDIR})
 endif(MSVC)
-

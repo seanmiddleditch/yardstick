@@ -1,0 +1,12 @@
+SET(HTML
+	index.html
+)
+
+SET(JAVASCRIPT
+	src/ys.js
+)
+
+set(YS_WEBTOOLDIR ${YS_TOOLSDIR}/web)
+
+install(FILES ${HTML} DESTINATION ${YS_WEBTOOLDIR})
+install(FILES ${JAVASCRIPT} DESTINATION ${YS_WEBTOOLDIR}/js)
