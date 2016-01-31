@@ -11,14 +11,34 @@ namespace _ys_ {
 
 class WebsocketSink
 {
-	ConcurrentCircularBuffer<4096> _output;
+	ysAllocator _allocator = nullptr;
+	unsigned short _port = 0;
+
+	struct WebbyServer* _server = nullptr;
+	struct WebbyConnection* _connection = nullptr;
+	void* _memory = nullptr;
+
+	static void webby_log(const char* text);
+	static int webby_dispatch(struct WebbyConnection *connection);
+	static int webby_connect(struct WebbyConnection *connection);
+	static void webby_connected(struct WebbyConnection *connection);
+	static void webby_closed(struct WebbyConnection *connection);
+	static int webby_frame(struct WebbyConnection *connection, const struct WebbyWsFrame *frame);
+
+	void WriteHeader();
 
 public:
-	ysResult Listen(unsigned short port);
+	WebsocketSink();
+	~WebsocketSink();
+
+	WebsocketSink(WebsocketSink const&) = delete;
+	WebsocketSink& operator=(WebsocketSink const&) = delete;
+
+	ysResult Listen(unsigned short port, ysAllocator alloc);
 	ysResult Close();
 	
 	ysResult Update();
-	ysResult WriteEventStream(void const* buffer, std::uint32_t len);
+	ysResult WriteEventStream(int numBuffers, void const** buffers, std::uint32_t const* sizes);
 	ysResult Flush();
 };
 
