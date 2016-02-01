@@ -73,7 +73,7 @@ void GlobalState::ThreadMain()
 
 void GlobalState::ProcessThread(ThreadState* thread)
 {
-	ysEvent ev;
+	EventData ev;
 	int count = 512;
 	while (--count && thread->Deque(ev))
 		_websocketSink.WriteEvent(ev);

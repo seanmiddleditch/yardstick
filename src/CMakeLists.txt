@@ -11,6 +11,7 @@ set(PRIVATE_HEADERS
 	Event.h
 	GlobalState.h
 	PointerHash.h
+	Protocol.h
 	Spinlock.h
 	ThreadState.h
 	WebsocketSink.h

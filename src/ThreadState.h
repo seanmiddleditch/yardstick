@@ -5,6 +5,7 @@
 #include <yardstick/yardstick.h>
 
 #include "ConcurrentQueue.h"
+#include "Protocol.h"
 
 #include <thread>
 
@@ -12,7 +13,7 @@ namespace _ys_ {
 
 class ThreadState
 {
-	ConcurrentQueue<ysEvent, 512> _queue;
+	ConcurrentQueue<EventData, 512> _queue;
 	std::thread::id _thread;
 
 	// managed by GlobalState _only_!!!
@@ -35,9 +36,9 @@ public:
 
 	std::thread::id const& GetThreadId() const { return _thread; }
 
-	void Enque(ysEvent const& ev);
+	void Enque(EventData const& ev);
 
-	bool Deque(ysEvent& out_ev);
+	bool Deque(EventData& out_ev);
 };
 
 } // namespace _ys_

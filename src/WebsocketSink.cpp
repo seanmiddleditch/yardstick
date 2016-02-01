@@ -3,6 +3,7 @@
 #include "WebsocketSink.h"
 #include "Clock.h"
 #include "PointerHash.h"
+#include "Protocol.h"
 #include <cstring>
 #include <allocators>
 
@@ -70,8 +71,8 @@ void WebsocketSink::webby_connected(struct WebbyConnection* connection)
 	if (session == nullptr)
 		return;
 
-	ysEvent ev;
-	ev.type = ysEvent::TypeHeader;
+	EventData ev;
+	ev.type = EventData::TypeHeader;
 	ev.header.frequency = GetClockFrequency();
 
 	sink.WriteSessionEvent(session, ev);
@@ -177,20 +178,20 @@ ysResult WebsocketSink::WriteSessionString(Session* session, char const* str)
 	return ysResult::Success;
 }
 
-ysResult WebsocketSink::WriteSessionEvent(Session* session, ysEvent const& ev)
+ysResult WebsocketSink::WriteSessionEvent(Session* session, EventData const& ev)
 {
 	// flush any strings
 	switch (ev.type)
 	{
-	case ysEvent::TypeRegion:
+	case EventData::TypeRegion:
 		YS_TRY(WriteSessionString(session, ev.region.name));
 		YS_TRY(WriteSessionString(session, ev.region.file));
 		break;
-	case ysEvent::TypeCounter:
+	case EventData::TypeCounter:
 		YS_TRY(WriteSessionString(session, ev.counter.name));
 		YS_TRY(WriteSessionString(session, ev.counter.file));
 		break;
-	case ysEvent::TypeString:
+	case EventData::TypeString:
 		// #FIXME - what do we even do here?
 		break;
 	default: break;
@@ -198,7 +199,7 @@ ysResult WebsocketSink::WriteSessionEvent(Session* session, ysEvent const& ev)
 
 	char buffer[64];
 	std::size_t length;
-	YS_TRY(write_event(buffer, sizeof(buffer), ev, length));
+	YS_TRY(EncodeEvent(buffer, sizeof(buffer), ev, length));
 
 	return WriteSessionBytes(session, buffer, length);
 }
@@ -299,7 +300,7 @@ ysResult WebsocketSink::Flush()
 
 }
 
-ysResult WebsocketSink::WriteEvent(ysEvent const& ev)
+ysResult WebsocketSink::WriteEvent(EventData const& ev)
 {
 	for (Session* session = _sessions; session != nullptr; session = session->_next)
 		WriteSessionEvent(session, ev);

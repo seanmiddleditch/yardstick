@@ -46,7 +46,7 @@ bool write(T const& value, void* buffer, std::size_t available, std::size_t& ino
 
 } // anonymous namespace
 
-YS_API ysResult YS_CALL _ys_::write_event(void* out_buffer, std::size_t available, ysEvent const& ev, std::size_t& out_length)
+ysResult _ys_::EncodeEvent(void* out_buffer, std::size_t available, EventData const& ev, std::size_t& out_length)
 {
 	out_length = 0;
 
@@ -58,29 +58,29 @@ YS_API ysResult YS_CALL _ys_::write_event(void* out_buffer, std::size_t availabl
 
 	switch (ev.type)
 	{
-	case ysEvent::TypeNone:
+	case EventData::TypeNone:
 		break;
-	case ysEvent::TypeHeader:
+	case EventData::TypeHeader:
 		TRY_WRITE(ev.header.frequency);
 		break;
-	case ysEvent::TypeTick:
+	case EventData::TypeTick:
 		TRY_WRITE(ev.tick.when);
 		break;
-	case ysEvent::TypeRegion:
+	case EventData::TypeRegion:
 		TRY_WRITE(ev.region.line);
 		TRY_WRITE(hash_pointer(ev.region.name));
 		TRY_WRITE(hash_pointer(ev.region.file));
 		TRY_WRITE(ev.region.begin);
 		TRY_WRITE(ev.region.end);
 		break;
-	case ysEvent::TypeCounter:
+	case EventData::TypeCounter:
 		TRY_WRITE(ev.counter.line);
 		TRY_WRITE(hash_pointer(ev.counter.name));
 		TRY_WRITE(hash_pointer(ev.counter.file));
 		TRY_WRITE(ev.counter.when);
 		TRY_WRITE(ev.counter.value);
 		break;
-	case ysEvent::TypeString:
+	case EventData::TypeString:
 		TRY_WRITE(ev.string.id);
 		TRY_WRITE(ev.string.size);
 		std::memcpy(static_cast<char*>(out_buffer) + out_length, ev.string.str, ev.string.size);
@@ -90,57 +90,57 @@ YS_API ysResult YS_CALL _ys_::write_event(void* out_buffer, std::size_t availabl
 	return ysResult::Success;
 }
 
-YS_API ysResult YS_CALL read_event(ysEvent& out_ev, void const* buffer, std::size_t available, ysStringMapper mapper, std::size_t& out_length)
-{
-	out_length = 0;
-
-	if (buffer == nullptr)
-		return ysResult::InvalidParameter;
-
-	std::uint8_t type;
-	TRY_READ(type);
-	out_ev.type = static_cast<decltype(out_ev.type)>(type);
-
-	ysStringHandle str1, str2;
-
-	switch (out_ev.type)
-	{
-	case ysEvent::TypeNone:
-		break;
-	case ysEvent::TypeHeader:
-		TRY_READ(out_ev.header.frequency);
-		break;
-	case ysEvent::TypeTick:
-		TRY_READ(out_ev.tick.when);
-		break;
-	case ysEvent::TypeRegion:
-		TRY_READ(out_ev.region.line);
-		TRY_READ(str1);
-		out_ev.region.name = mapper(str1, 0, nullptr);
-		TRY_READ(str2);
-		out_ev.region.file = mapper(str2, 0, nullptr);
-		TRY_READ(out_ev.region.begin);
-		TRY_READ(out_ev.region.end);
-		break;
-	case ysEvent::TypeCounter:
-		TRY_READ(out_ev.counter.line);
-		TRY_READ(str1);
-		out_ev.counter.name = mapper(str1, 0, nullptr);
-		TRY_READ(str2);
-		out_ev.counter.file = mapper(str1, 0, nullptr);
-		TRY_READ(out_ev.counter.when);
-		TRY_READ(out_ev.counter.value);
-		break;
-	case ysEvent::TypeString:
-		TRY_READ(out_ev.string.id);
-		TRY_READ(out_ev.string.size);
-		if (available - out_length < out_ev.string.size)
-			return ysResult::NoMemory;
-		mapper(out_ev.string.id, out_ev.string.size, static_cast<char const*>(buffer) + out_length);
-		out_length += out_ev.string.size;
-		// #FIXME - where to store the string?
-		break;
-	}
-
-	return ysResult::Success;
-}
+//YS_API ysResult YS_CALL read_event(ysEvent& out_ev, void const* buffer, std::size_t available, ysStringMapper mapper, std::size_t& out_length)
+//{
+//	out_length = 0;
+//
+//	if (buffer == nullptr)
+//		return ysResult::InvalidParameter;
+//
+//	std::uint8_t type;
+//	TRY_READ(type);
+//	out_ev.type = static_cast<decltype(out_ev.type)>(type);
+//
+//	ysStringHandle str1, str2;
+//
+//	switch (out_ev.type)
+//	{
+//	case ysEvent::TypeNone:
+//		break;
+//	case ysEvent::TypeHeader:
+//		TRY_READ(out_ev.header.frequency);
+//		break;
+//	case ysEvent::TypeTick:
+//		TRY_READ(out_ev.tick.when);
+//		break;
+//	case ysEvent::TypeRegion:
+//		TRY_READ(out_ev.region.line);
+//		TRY_READ(str1);
+//		out_ev.region.name = mapper(str1, 0, nullptr);
+//		TRY_READ(str2);
+//		out_ev.region.file = mapper(str2, 0, nullptr);
+//		TRY_READ(out_ev.region.begin);
+//		TRY_READ(out_ev.region.end);
+//		break;
+//	case ysEvent::TypeCounter:
+//		TRY_READ(out_ev.counter.line);
+//		TRY_READ(str1);
+//		out_ev.counter.name = mapper(str1, 0, nullptr);
+//		TRY_READ(str2);
+//		out_ev.counter.file = mapper(str1, 0, nullptr);
+//		TRY_READ(out_ev.counter.when);
+//		TRY_READ(out_ev.counter.value);
+//		break;
+//	case ysEvent::TypeString:
+//		TRY_READ(out_ev.string.id);
+//		TRY_READ(out_ev.string.size);
+//		if (available - out_length < out_ev.string.size)
+//			return ysResult::NoMemory;
+//		mapper(out_ev.string.id, out_ev.string.size, static_cast<char const*>(buffer) + out_length);
+//		out_length += out_ev.string.size;
+//		// #FIXME - where to store the string?
+//		break;
+//	}
+//
+//	return ysResult::Success;
+//}
