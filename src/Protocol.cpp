@@ -48,24 +48,6 @@ bool write(T const& value, char* buffer, std::size_t available, std::size_t& out
 
 } // anonymous namespace
 
-YS_API ysResult YS_CALL _ys_::emit_event(ysEvent const& ev)
-{
-	char storage[64];
-	std::size_t length;
-	ysResult rs = write_event(storage, sizeof(storage), ev, length);
-
-	if (rs == ysResult::Success)
-	{
-		ThreadState& thrd = ThreadState::thread_instance();
-		thrd.Write(storage, static_cast<std::uint32_t>(length));
-		return ysResult::Success;
-	}
-	else
-	{
-		return rs;
-	}
-}
-
 YS_API ysResult YS_CALL _ys_::write_event(void* out_buffer, std::size_t bufLen, ysEvent const& ev, std::size_t& out_length)
 {
 	out_length = 0;

@@ -3,12 +3,22 @@
 #include "WebsocketSink.h"
 #include "Clock.h"
 #include <cstring>
+#include <allocators>
 
 #ifdef _WIN32
 #	include <winsock2.h>
 #endif
 
 using namespace _ys_;
+
+struct WebsocketSink::Session
+{
+	// note: no constructor or destructor is called for this struct!
+	Session* _prev;
+	Session* _next;
+	WebsocketSink* _sink;
+	WebbyConnection* _connection;
+};
 
 WebsocketSink::WebsocketSink()
 {
@@ -39,10 +49,8 @@ int WebsocketSink::webby_dispatch(struct WebbyConnection* connection)
 	return 1;
 }
 
-int WebsocketSink::webby_connect(struct WebbyConnection* connection)
+int WebsocketSink::webby_connect(struct WebbyConnection*)
 {
-	WebsocketSink& sink = *static_cast<WebsocketSink*>(connection->user_data);
-
 	return 0;
 }
 
@@ -50,32 +58,22 @@ void WebsocketSink::webby_connected(struct WebbyConnection* connection)
 {
 	WebsocketSink& sink = *static_cast<WebsocketSink*>(connection->user_data);
 
-	sink._connection = connection;
+	Session* session = sink.CreateSession(connection);
+	// #FIXME - if this fails, we want to boot the connection, but how?
+	if (session == nullptr)
+		return;
 
-	sink.WriteHeader();
-}
-
-void WebsocketSink::WriteHeader()
-{
 	ysEvent ev;
 	ev.type = ysEvent::TypeHeader;
 	ev.header.frequency = GetClockFrequency();
 
-	char buffer[32];
-	std::size_t length;
-	write_event(buffer, sizeof(buffer), ev, length);
-
-	WebbyBeginSocketFrame(_connection, WEBBY_WS_OP_BINARY_FRAME);
-	WebbyWrite(_connection, buffer, length);
-	WebbyEndSocketFrame(_connection);
+	sink.WriteEvent(session, ev);
 }
 
 void WebsocketSink::webby_closed(struct WebbyConnection* connection)
 {
 	WebsocketSink& sink = *static_cast<WebsocketSink*>(connection->user_data);
-
-	if (connection == sink._connection)
-		sink._connection = nullptr;
+	sink.DestroySession(connection);
 }
 
 int WebsocketSink::webby_frame(struct WebbyConnection* connection, const struct WebbyWsFrame* frame)
@@ -89,6 +87,54 @@ int WebsocketSink::webby_frame(struct WebbyConnection* connection, const struct 
 		// #FIXME: need a callback/command mechanism in Yardstick
 	}
 	return 0;
+}
+
+WebsocketSink::Session* WebsocketSink::CreateSession(WebbyConnection* connection)
+{
+	Session* session = (Session*)_allocator(nullptr, sizeof(Session));
+	if (session == nullptr)
+		return nullptr;
+
+	session->_next = _sessions;
+	session->_prev = nullptr;
+	session->_sink = this;
+	session->_connection = connection;
+
+	_sessions = session;
+
+	return session;
+}
+
+void WebsocketSink::DestroySession(WebbyConnection* connection)
+{
+	Session* session = _sessions;
+	while (session != nullptr && session->_connection == connection)
+		session = session->_next;
+
+	if (session != nullptr)
+	{
+		if (session->_next != nullptr)
+			session->_next->_prev = session->_prev;
+		if (session->_prev != nullptr)
+			session->_prev->_next = session->_next;
+		if (_sessions == session)
+			_sessions = session->_next;
+
+		_allocator(session, 0);
+	}
+}
+
+ysResult WebsocketSink::WriteEvent(Session* session, ysEvent const& ev)
+{
+	char buffer[64];
+	std::size_t length;
+	YS_TRY(write_event(buffer, sizeof(buffer), ev, length));
+
+	WebbyBeginSocketFrame(session->_connection, WEBBY_WS_OP_BINARY_FRAME);
+	WebbyWrite(session->_connection, buffer, length);
+	WebbyEndSocketFrame(session->_connection);
+
+	return ysResult::Success;
 }
 
 ysResult WebsocketSink::Listen(unsigned short port, ysAllocator allocator)
@@ -161,21 +207,10 @@ ysResult WebsocketSink::Update()
 	}
 }
 
-ysResult WebsocketSink::WriteEventStream(int numBuffers, void const** buffers, std::uint32_t const* sizes)
+ysResult WebsocketSink::WriteEvent(ysEvent const& ev)
 {
-	if (_server != nullptr)
-	{
-		if (_connection != nullptr)
-		{
-			WebbyBeginSocketFrame(_connection, WEBBY_WS_OP_BINARY_FRAME);
-			for (int i = 0; i != numBuffers; ++i)
-				WebbyWrite(_connection, buffers[i], sizes[i]);
-			WebbyEndSocketFrame(_connection);
-		}
-		return ysResult::Success;
-	}
-	else
-	{
-		return ysResult::Uninitialized;
-	}
+	for (Session* session = _sessions; session != nullptr; session = session->_next)
+		WriteEvent(session, ev);
+
+	return ysResult::Success;
 }

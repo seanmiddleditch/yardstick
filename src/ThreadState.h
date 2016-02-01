@@ -2,7 +2,9 @@
 
 #pragma once
 
-#include "ConcurrentCircularBuffer.h"
+#include <yardstick/yardstick.h>
+
+#include "ConcurrentQueue.h"
 
 #include <thread>
 
@@ -10,29 +12,13 @@ namespace _ys_ {
 
 class ThreadState
 {
-	ConcurrentCircularBuffer<4096> _buffer;
+	ConcurrentQueue<ysEvent, 512> _queue;
 	std::thread::id _thread;
 
 	// managed by GlobalState _only_!!!
 	ThreadState* _prev = nullptr;
 	ThreadState* _next = nullptr;
 	friend class GlobalState;
-
-	template <typename T>
-	static std::uint32_t calculate_size(T const& value) { return sizeof(value); }
-
-	template <typename T, typename... Ts>
-	static std::uint32_t calculate_size(T const& value, Ts const&... ts) { return calculate_size(value) + calculate_size(ts...); }
-
-	template <typename T>
-	static void write_value(void* out, T const& value) { std::memcpy(out, &value, sizeof(value)); }
-
-	template <typename T, typename... Ts>
-	static void write_value(void* out, T const& value, Ts const&... ts)
-	{
-		write_value(out, value);
-		write_value(static_cast<char*>(out) + sizeof(value), ts...);
-	}
 
 public:
 	ThreadState();
@@ -49,12 +35,9 @@ public:
 
 	std::thread::id const& GetThreadId() const { return _thread; }
 
-	void Write(void const* bytes, std::uint32_t len);
+	void Enque(ysEvent const& ev);
 
-	std::uint32_t Read(void* out, std::uint32_t max)
-	{
-		return _buffer.Read(out, max);
-	}
+	bool Deque(ysEvent& out_ev);
 };
 
 } // namespace _ys_

@@ -78,18 +78,10 @@ void GlobalState::ThreadMain()
 
 void GlobalState::ProcessThread(ThreadState* thread)
 {
-	char tmp[4096];
-	int const len = thread->Read(tmp, sizeof(tmp));
-	if (len != 0)
-		WriteThreadSink(thread->GetThreadId(), tmp, len);
-}
-
-void GlobalState::WriteThreadSink(std::thread::id thread, void const* bytes, std::uint32_t len)
-{
-	//void const* buffers[] = { &thread, bytes };
-	//std::uint32_t const sizes[] = { static_cast<std::uint32_t>(sizeof(thread)), len };
-	//_websocketSink.WriteEventStream(2, buffers, sizes);
-	_websocketSink.WriteEventStream(1, &bytes, &len);
+	ysEvent ev;
+	int count = 512;
+	while (--count && thread->Deque(ev))
+		_websocketSink.WriteEvent(ev);
 }
 
 void GlobalState::RegisterThread(ThreadState* thread)

@@ -4,19 +4,21 @@
 
 #include <yardstick/yardstick.h>
 
-#include "ConcurrentCircularBuffer.h"
 #include "webby/webby.h"
 
 namespace _ys_ {
 
 class WebsocketSink
 {
+	struct Session;
+
 	ysAllocator _allocator = nullptr;
 	unsigned short _port = 0;
 
 	struct WebbyServer* _server = nullptr;
-	struct WebbyConnection* _connection = nullptr;
 	void* _memory = nullptr;
+
+	Session* _sessions = nullptr;
 
 	static void webby_log(const char* text);
 	static int webby_dispatch(struct WebbyConnection *connection);
@@ -25,7 +27,10 @@ class WebsocketSink
 	static void webby_closed(struct WebbyConnection *connection);
 	static int webby_frame(struct WebbyConnection *connection, const struct WebbyWsFrame *frame);
 
-	void WriteHeader();
+	Session* CreateSession(WebbyConnection* connection);
+	void DestroySession(WebbyConnection* connection);
+
+	ysResult WriteEvent(Session* session, ysEvent const& ev);
 
 public:
 	WebsocketSink();
@@ -38,7 +43,7 @@ public:
 	ysResult Close();
 	
 	ysResult Update();
-	ysResult WriteEventStream(int numBuffers, void const** buffers, std::uint32_t const* sizes);
+	ysResult WriteEvent(ysEvent const& ev);
 	ysResult Flush();
 };
 

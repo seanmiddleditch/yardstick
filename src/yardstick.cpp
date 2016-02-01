@@ -17,6 +17,13 @@ ysResult YS_API _ys_::shutdown()
 	return GlobalState::instance().Shutdown();
 }
 
+YS_API ysResult YS_CALL _ys_::emit_event(ysEvent const& ev)
+{
+	ThreadState& thrd = ThreadState::thread_instance();
+	thrd.Enque(ev);
+	return ysResult::Success;
+}
+
 YS_API ysResult YS_CALL _ys_::emit_counter(ysTime when, double value, char const* name, char const* file, int line)
 {
 	ysEvent ev;
@@ -26,7 +33,6 @@ YS_API ysResult YS_CALL _ys_::emit_counter(ysTime when, double value, char const
 	ev.counter.file = hash_pointer(file);
 	ev.counter.when = when;
 	ev.counter.value = value;
-	//return ysResult::Success;
 	return emit_event(ev);
 }
 

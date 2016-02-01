@@ -7,7 +7,6 @@
 #include "Atomics.h"
 #include "Spinlock.h"
 #include "Event.h"
-#include "ConcurrentCircularBuffer.h"
 #include "WebsocketSink.h"
 
 #include <cstring>
@@ -33,7 +32,6 @@ class GlobalState
 
 	void ThreadMain();
 	void ProcessThread(ThreadState* thread);
-	void WriteThreadSink(std::thread::id thread, void const* bytes, std::uint32_t len);
 
 public:
 	GlobalState() : _active(false) {}
