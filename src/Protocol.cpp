@@ -79,6 +79,13 @@ YS_API ysResult YS_CALL _ys_::write_event(void* out_buffer, std::size_t bufLen, 
 		TRY_WRITE(ev.counter.when);
 		TRY_WRITE(ev.counter.value);
 		break;
+	case ysEvent::TypeString:
+		TRY_WRITE(ev.string.id);
+		TRY_WRITE(ev.string.size);
+		if (bufLen - out_length < ev.string.size)
+			return ysResult::NoMemory;
+		std::memcpy(static_cast<char*>(out_buffer) + out_length, ev.string.str, ev.string.size);
+		break;
 	}
 
 	return ysResult::Success;
@@ -118,6 +125,12 @@ YS_API ysResult YS_CALL read_event(ysEvent& out_ev, std::size_t& out_len, void c
 		TRY_READ(out_ev.counter.file);
 		TRY_READ(out_ev.counter.when);
 		TRY_READ(out_ev.counter.value);
+		break;
+	case ysEvent::TypeString:
+		TRY_READ(out_ev.string.id);
+		TRY_READ(out_ev.string.size);
+		out_len += out_ev.string.size;
+		// #FIXME - where to store the string?
 		break;
 	}
 

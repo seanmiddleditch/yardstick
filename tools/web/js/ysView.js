@@ -32,7 +32,7 @@
 		});
 		
 		ys.on('counter', function(ev){
-			counters[ev.name] = ev.value;
+			counters[ys.tostr(ev.name)] = ev.value;
 		});
 	};
 })();

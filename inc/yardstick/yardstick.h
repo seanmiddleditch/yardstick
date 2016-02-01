@@ -75,7 +75,7 @@ enum class ysResult : std::uint8_t
 /// Protocol event
 struct ysEvent
 {
-	enum { TypeNone = 0, TypeHeader = 1, TypeTick = 2, TypeRegion = 3, TypeCounter = 4 } type;
+	enum { TypeNone = 0, TypeHeader = 1, TypeTick = 2, TypeRegion = 3, TypeCounter = 4, TypeString = 5 } type;
 	union
 	{
 		struct
@@ -102,6 +102,12 @@ struct ysEvent
 			ysTime when;
 			double value;
 		} counter;
+		struct
+		{
+			ysStringHandle id;
+			std::uint16_t size;
+			char str[1];
+		} string;
 	};
 };
 
