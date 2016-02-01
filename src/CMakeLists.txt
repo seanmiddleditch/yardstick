@@ -8,10 +8,10 @@ set(PRIVATE_HEADERS
 	Clock.h
 	ConcurrentCircularBuffer.h
 	ConcurrentQueue.h
-	Event.h
 	GlobalState.h
 	PointerHash.h
 	Protocol.h
+	Signal.h
 	Spinlock.h
 	ThreadState.h
 	WebsocketSink.h
