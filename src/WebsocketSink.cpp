@@ -191,6 +191,13 @@ ysResult WebsocketSink::Close()
 	if (_allocator != nullptr)
 		_allocator(_memory, 0);
 
+	while (_sessions != nullptr)
+	{
+		Session* tmp = _sessions->_next;
+		_allocator(_sessions, 0);
+		_sessions = tmp;
+	}
+
 	return ysResult::Success;
 }
 
