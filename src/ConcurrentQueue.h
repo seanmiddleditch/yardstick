@@ -18,10 +18,10 @@ class ConcurrentQueue
 	static_assert(std::is_pod<T>::value, "ConcurrentQueue can only be used for PODs");
 	static_assert((kBufferSize & kBufferMask) == 0, "ConcurrentQueue size must be a power of 2");
 
-	AlignedAtomicU32 _sequence[kBufferSize];
+	AlignedAtomic<std::uint32_t> _sequence[kBufferSize];
+	AlignedAtomic<std::uint32_t> _enque = 0;
+	AlignedAtomic<std::uint32_t> _deque = 0;
 	T _buffer[kBufferSize];
-	AlignedAtomicU32 _enque = 0;
-	AlignedAtomicU32 _deque = 0;
 
 public:
 	inline ConcurrentQueue();
@@ -72,7 +72,7 @@ void ConcurrentQueue<T, S>::Enque(T const& value)
 template <typename T, std::size_t S>
 bool ConcurrentQueue<T, S>::TryDeque(T& out)
 {
-	std::uint32_t target = _enque.load(std::memory_order_relaxed);
+	std::uint32_t target = _deque.load(std::memory_order_relaxed);
 	std::uint32_t id = _sequence[target & kBufferMask].load(std::memory_order_acquire);
 	std::int32_t delta = id - (target + 1);
 
