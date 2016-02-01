@@ -68,7 +68,7 @@ public:
 	Signal& operator=(Signal const&) = delete;
 
 	inline void Wait(std::uint32_t microseconds);
-	inline void Signal();
+	inline void Post();
 };
 
 void Signal::Wait(std::uint32_t microseconds)
