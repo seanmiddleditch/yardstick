@@ -62,7 +62,7 @@ YS_API ysResult YS_CALL _ys_::tick()
 	return emit_event(ev);
 }
 
-YS_API ysResult YS_CALL _ys_::listen(unsigned short port)
+YS_API ysResult YS_CALL _ys_::listen_web(unsigned short port)
 {
 	return GlobalState::instance().ListenWebsocket(port);
 }

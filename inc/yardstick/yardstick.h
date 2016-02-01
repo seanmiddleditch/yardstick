@@ -115,7 +115,7 @@ using ysCallback = void(YS_CALL*)(ysEvent const& ev, void* userdata);
 #	define ysInitialize(config) (::_ys_::initialize((config)))
 #	define ysShutdown() (::_ys_::shutdown())
 #	define ysTick() (::_ys_::tick())
-#	define ysListen(port) (::_ys_::listen((port)))
+#	define ysListenWeb(port) (::_ys_::listen_web((port)))
 #	define ysAddCallback(callback, userdata) (::_ys_::add_callback((callback), (userdata)))
 #	define ysRemoveCallback(callback, userdata) (::_ys_::remove_callback((callback), (userdata)))
 
@@ -134,7 +134,7 @@ using ysCallback = void(YS_CALL*)(ysEvent const& ev, void* userdata);
 #	define ysTick() (::ysResult::Disabled)
 #	define ysProfile(name) do{YS_IGNORE((name));}while(false)
 #	define ysCounter(name, value) (YS_IGNORE((name)),YS_IGNORE((value)),::ysResult::Disabled)
-#	define ysListen(port) (YS_IGNORE((port)),::ysResult::Disabled)
+#	define ysListenWeb(port) (YS_IGNORE((port)),::ysResult::Disabled)
 #	define ysAddCallback(callback, userdata) (YS_IGNORE((callback)),::ysResult::Disabled)
 #	define ysRemoveCallback(callback, userdata) (YS_IGNORE((callback)),YS_IGNORE((userdata)),::ysResult::Disabled)
 
@@ -163,7 +163,7 @@ namespace _ys_
 	/// <summary> Listens for incoming Yardstick tool connections on the given port.  </summary>
 	/// <param name="port"> The port to listen on. </param>
 	/// <returns> Success or error code. </returns>
-	YS_API ysResult YS_CALL listen(unsigned short port);
+	YS_API ysResult YS_CALL listen_web(unsigned short port);
 
 	/// Emit a counter.
 	/// @internal
