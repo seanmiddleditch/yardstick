@@ -51,6 +51,9 @@ using ysStringHandle = std::uint32_t;
 /// Follows the rules of realloc(), except that it will only be used to allocate or free.
 using ysAllocator = void*(YS_CALL*)(void* block, std::size_t bytes);
 
+/// <summary> Callback to update or retrieve a string associated with a given handle. </summary>
+using ysStringMapper = char const*(YS_CALL*)(ysStringHandle handle, std::uint16_t length, char const* string);
+
 /// Return codes.
 enum class ysResult : std::uint8_t
 {
@@ -89,16 +92,16 @@ struct ysEvent
 		struct
 		{
 			std::uint32_t line;
-			ysStringHandle name;
-			ysStringHandle file;
+			char const* name;
+			char const* file;
 			ysTime begin;
 			ysTime end;
 		} region;
 		struct
 		{
 			std::uint32_t line;
-			ysStringHandle name;
-			ysStringHandle file;
+			char const* name;
+			char const* file;
 			ysTime when;
 			double value;
 		} counter;
@@ -106,7 +109,7 @@ struct ysEvent
 		{
 			ysStringHandle id;
 			std::uint16_t size;
-			char str[1];
+			char const* str;
 		} string;
 	};
 };
@@ -184,14 +187,14 @@ namespace _ys_
 
 	/// <summary> Writes an event into a buffer. </summary>
 	/// <param name="out_buffer"> [in,out] The position of a buffer to write the event into. </param>
-	/// <param name="bufLen"> Length of the buffer from the given position. </param>
+	/// <param name="available"> Length of the buffer from the given position. </param>
 	/// <param name="ev"> The evevent to be written. </param>
 	/// <param name="out_length"> [in,out] Number of bytes written into the buffer. </param>
 	/// <returns> ysResult::NoMemory if the buffer is not big enough, otherwise ysResult::Success. </returns>
-	YS_API ysResult YS_CALL write_event(void* out_buffer, std::size_t bufLen, ysEvent const& ev, std::size_t& out_length);
+	YS_API ysResult YS_CALL write_event(void* out_buffer, std::size_t available, ysEvent const& ev, std::size_t& out_length);
 
 	/// Parses an event out of a buffer.
-	YS_API ysResult YS_CALL read_event(ysEvent& out_ev, std::size_t& out_len, void const* buffer, std::size_t available);
+	YS_API ysResult YS_CALL read_event(ysEvent& out_ev, void const* buffer, std::size_t available, ysStringMapper mapper, std::size_t& out_length);
 
 	/// Read the current clock value.
 	/// @internal

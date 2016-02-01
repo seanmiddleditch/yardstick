@@ -3,7 +3,6 @@
 #include "GlobalState.h"
 #include "ThreadState.h"
 #include "Clock.h"
-#include "PointerHash.h"
 
 using namespace _ys_;
 
@@ -29,8 +28,8 @@ YS_API ysResult YS_CALL _ys_::emit_counter(ysTime when, double value, char const
 	ysEvent ev;
 	ev.type = ysEvent::TypeCounter;
 	ev.counter.line = line;
-	ev.counter.name = hash_pointer(name);
-	ev.counter.file = hash_pointer(file);
+	ev.counter.name = name;
+	ev.counter.file = file;
 	ev.counter.when = when;
 	ev.counter.value = value;
 	return emit_event(ev);
@@ -41,11 +40,10 @@ YS_API ysResult YS_CALL _ys_::emit_region(ysTime startTime, ysTime endTime, char
 	ysEvent ev;
 	ev.type = ysEvent::TypeRegion;
 	ev.region.line = line;
-	ev.region.name = hash_pointer(name);
-	ev.region.file = hash_pointer(name);
+	ev.region.name = name;
+	ev.region.file = file;
 	ev.region.begin = startTime;
 	ev.region.end = endTime;
-	return ysResult::Success;
 	return emit_event(ev);
 }
 

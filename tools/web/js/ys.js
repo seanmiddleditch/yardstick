@@ -70,8 +70,8 @@
 			case 3 /*REGION*/:
 				var ev = {
 					line: data.getUint32(pos + 1, true),
-					file: data.getUint32(pos + 5, true),
-					name: data.getUint32(pos + 9, true),
+					name: data.getUint32(pos + 5, true),
+					file: data.getUint32(pos + 9, true),
 					start: data.getUint64(pos + 13, true),
 					end: data.getUint64(pos + 21, true)
 				};
@@ -80,15 +80,15 @@
 			case 4 /*COUNTER*/:
 				var ev = {
 					line: data.getUint32(pos + 1, true),
-					file: data.getUint32(pos + 5, true),
-					name: data.getUint32(pos + 9, true),
+					name: data.getUint32(pos + 5, true),
+					file: data.getUint32(pos + 9, true),
 					when: data.getUint64(pos + 13, true),
 					value: data.getFloat64(pos + 21, true)
 				};
 				ys.emit('counter', ev);
 				return 29;
 			case 5 /*STRING*/:
-				var id = data.getUInt32(pos + 1, true);
+				var id = data.getUint32(pos + 1, true);
 				var len = data.getUint16(pos + 5, true);
 				// yup, pretty terrible
 				var str = '';

@@ -2,6 +2,7 @@
 
 #include "WebsocketSink.h"
 #include "Clock.h"
+#include "PointerHash.h"
 #include <cstring>
 #include <allocators>
 
@@ -161,8 +162,18 @@ ysResult WebsocketSink::WriteSessionBytes(Session* session, void const* buffer, 
 	return ysResult::Success;
 }
 
-ysResult WebsocketSink::WriteSessionString(ysStringHandle handle, char const* str)
+ysResult WebsocketSink::WriteSessionString(Session* session, char const* str)
 {
+	ysStringHandle const handle = hash_pointer(str);
+
+	WebbyBeginSocketFrame(session->_connection, WEBBY_WS_OP_BINARY_FRAME);
+	WebbyPrintf(session->_connection, "\x05");
+	WebbyWrite(session->_connection, &handle, sizeof(handle));
+	std::uint16_t const len = static_cast<std::uint16_t>(std::strlen(str));
+	WebbyWrite(session->_connection, &len, sizeof(len));
+	WebbyWrite(session->_connection, str, len);
+	WebbyEndSocketFrame(session->_connection);
+	
 	return ysResult::Success;
 }
 
@@ -172,8 +183,15 @@ ysResult WebsocketSink::WriteSessionEvent(Session* session, ysEvent const& ev)
 	switch (ev.type)
 	{
 	case ysEvent::TypeRegion:
+		YS_TRY(WriteSessionString(session, ev.region.name));
+		YS_TRY(WriteSessionString(session, ev.region.file));
 		break;
 	case ysEvent::TypeCounter:
+		YS_TRY(WriteSessionString(session, ev.counter.name));
+		YS_TRY(WriteSessionString(session, ev.counter.file));
+		break;
+	case ysEvent::TypeString:
+		// #FIXME - what do we even do here?
 		break;
 	default: break;
 	}

@@ -4,34 +4,32 @@
 
 #include "ThreadState.h"
 #include "GlobalState.h"
+#include "PointerHash.h"
 
 using namespace _ys_;
 
 namespace {
 
 template <typename T>
-bool read(T& out_value, std::size_t& inout_len, void const*& inout_buffer, std::size_t& inout_available)
+bool read(T& out_value, void const* buffer, std::size_t available, std::size_t& inout_read)
 {
-	if (sizeof(out_value) > inout_available)
+	if (sizeof(out_value) > available - inout_read)
 		return false;
 
-	std::memcpy(&out_value, inout_buffer, sizeof(out_value));
-
-	reinterpret_cast<char const*&>(inout_buffer) += sizeof(out_value);
-	inout_len += sizeof(out_value);
-	inout_available -= sizeof(out_value);
+	std::memcpy(&out_value, static_cast<char const*>(buffer) + inout_read, sizeof(out_value));
+	inout_read += sizeof(out_value);
 
 	return true;
 }
 
 template <typename T>
-bool write(T const& value, char* buffer, std::size_t available, std::size_t& out_written)
+bool write(T const& value, void* buffer, std::size_t available, std::size_t& inout_written)
 {
-	if (sizeof(value) > available - out_written)
+	if (sizeof(value) > available - inout_written)
 		return false;
 
-	std::memcpy(buffer + out_written, &value, sizeof(value));
-	out_written += sizeof(value);
+	std::memcpy(static_cast<char*>(buffer) + inout_written, &value, sizeof(value));
+	inout_written += sizeof(value);
 
 	return true;
 }
@@ -39,18 +37,21 @@ bool write(T const& value, char* buffer, std::size_t available, std::size_t& out
 #if defined(TRY_READ)
 #	undef TRY_READ
 #endif
-#define TRY_READ(value) do{ if (!read((value), out_len, buffer, available)) return ysResult::NoMemory; }while(false)
+#define TRY_READ(value) do{ if (!read((value), buffer, available, out_length)) return ysResult::NoMemory; }while(false)
 
 #if defined(TRY_WRITE)
 #	undef TRY_WRITE
 #endif
-#define TRY_WRITE(value) do{ if (!write((value), static_cast<char*>(out_buffer), bufLen, out_length)) return ysResult::NoMemory; }while(false)
+#define TRY_WRITE(value) do{ if (!write((value), out_buffer, available, out_length)) return ysResult::NoMemory; }while(false)
 
 } // anonymous namespace
 
-YS_API ysResult YS_CALL _ys_::write_event(void* out_buffer, std::size_t bufLen, ysEvent const& ev, std::size_t& out_length)
+YS_API ysResult YS_CALL _ys_::write_event(void* out_buffer, std::size_t available, ysEvent const& ev, std::size_t& out_length)
 {
 	out_length = 0;
+
+	if (out_buffer == nullptr)
+		return ysResult::InvalidParameter;
 
 	std::uint8_t const type = static_cast<std::uint8_t>(ev.type);
 	TRY_WRITE(type);
@@ -67,23 +68,21 @@ YS_API ysResult YS_CALL _ys_::write_event(void* out_buffer, std::size_t bufLen, 
 		break;
 	case ysEvent::TypeRegion:
 		TRY_WRITE(ev.region.line);
-		TRY_WRITE(ev.region.name);
-		TRY_WRITE(ev.region.file);
+		TRY_WRITE(hash_pointer(ev.region.name));
+		TRY_WRITE(hash_pointer(ev.region.file));
 		TRY_WRITE(ev.region.begin);
 		TRY_WRITE(ev.region.end);
 		break;
 	case ysEvent::TypeCounter:
 		TRY_WRITE(ev.counter.line);
-		TRY_WRITE(ev.counter.name);
-		TRY_WRITE(ev.counter.file);
+		TRY_WRITE(hash_pointer(ev.counter.name));
+		TRY_WRITE(hash_pointer(ev.counter.file));
 		TRY_WRITE(ev.counter.when);
 		TRY_WRITE(ev.counter.value);
 		break;
 	case ysEvent::TypeString:
 		TRY_WRITE(ev.string.id);
 		TRY_WRITE(ev.string.size);
-		if (bufLen - out_length < ev.string.size)
-			return ysResult::NoMemory;
 		std::memcpy(static_cast<char*>(out_buffer) + out_length, ev.string.str, ev.string.size);
 		break;
 	}
@@ -91,9 +90,9 @@ YS_API ysResult YS_CALL _ys_::write_event(void* out_buffer, std::size_t bufLen, 
 	return ysResult::Success;
 }
 
-YS_API ysResult YS_CALL read_event(ysEvent& out_ev, std::size_t& out_len, void const* buffer, std::size_t available)
+YS_API ysResult YS_CALL read_event(ysEvent& out_ev, void const* buffer, std::size_t available, ysStringMapper mapper, std::size_t& out_length)
 {
-	out_len = 0;
+	out_length = 0;
 
 	if (buffer == nullptr)
 		return ysResult::InvalidParameter;
@@ -101,6 +100,8 @@ YS_API ysResult YS_CALL read_event(ysEvent& out_ev, std::size_t& out_len, void c
 	std::uint8_t type;
 	TRY_READ(type);
 	out_ev.type = static_cast<decltype(out_ev.type)>(type);
+
+	ysStringHandle str1, str2;
 
 	switch (out_ev.type)
 	{
@@ -114,22 +115,29 @@ YS_API ysResult YS_CALL read_event(ysEvent& out_ev, std::size_t& out_len, void c
 		break;
 	case ysEvent::TypeRegion:
 		TRY_READ(out_ev.region.line);
-		TRY_READ(out_ev.region.name);
-		TRY_READ(out_ev.region.file);
+		TRY_READ(str1);
+		out_ev.region.name = mapper(str1, 0, nullptr);
+		TRY_READ(str2);
+		out_ev.region.file = mapper(str2, 0, nullptr);
 		TRY_READ(out_ev.region.begin);
 		TRY_READ(out_ev.region.end);
 		break;
 	case ysEvent::TypeCounter:
 		TRY_READ(out_ev.counter.line);
-		TRY_READ(out_ev.counter.name);
-		TRY_READ(out_ev.counter.file);
+		TRY_READ(str1);
+		out_ev.counter.name = mapper(str1, 0, nullptr);
+		TRY_READ(str2);
+		out_ev.counter.file = mapper(str1, 0, nullptr);
 		TRY_READ(out_ev.counter.when);
 		TRY_READ(out_ev.counter.value);
 		break;
 	case ysEvent::TypeString:
 		TRY_READ(out_ev.string.id);
 		TRY_READ(out_ev.string.size);
-		out_len += out_ev.string.size;
+		if (available - out_length < out_ev.string.size)
+			return ysResult::NoMemory;
+		mapper(out_ev.string.id, out_ev.string.size, static_cast<char const*>(buffer) + out_length);
+		out_length += out_ev.string.size;
 		// #FIXME - where to store the string?
 		break;
 	}

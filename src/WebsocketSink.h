@@ -32,7 +32,7 @@ class WebsocketSink
 	void DestroySession(Session* session);
 
 	ysResult WriteSessionBytes(Session* session, void const* buffer, std::size_t size);
-	ysResult WriteSessionString(ysStringHandle handle, char const* str);
+	ysResult WriteSessionString(Session* session, char const* str);
 	ysResult WriteSessionEvent(Session* session, ysEvent const& ev);
 	ysResult FlushSession(Session* session);
 
