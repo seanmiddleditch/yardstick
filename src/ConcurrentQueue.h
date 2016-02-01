@@ -19,8 +19,8 @@ class ConcurrentQueue
 	static_assert((kBufferSize & kBufferMask) == 0, "ConcurrentQueue size must be a power of 2");
 
 	AlignedAtomic<std::uint32_t> _sequence[kBufferSize];
-	AlignedAtomic<std::uint32_t> _enque = 0;
-	AlignedAtomic<std::uint32_t> _deque = 0;
+	AlignedAtomic<std::uint32_t> _enque;
+	AlignedAtomic<std::uint32_t> _deque;
 	T _buffer[kBufferSize];
 
 public:
@@ -34,8 +34,10 @@ public:
 };
 
 template <typename T, std::size_t S>
-ConcurrentQueue<T, S>::ConcurrentQueue() 
+ConcurrentQueue<T, S>::ConcurrentQueue()
 {
+	_enque.store(0, std::memory_order_relaxed);
+	_deque.store(0, std::memory_order_relaxed);
 	for (std::uint32_t i = 0; i != kBufferSize; ++i)
 		_sequence[i].store(i, std::memory_order_relaxed);
 }
