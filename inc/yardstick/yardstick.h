@@ -39,6 +39,8 @@
 #	define YS_ASSERT(expr, msg) assert((expr) && (msg))
 #endif
 
+#define YS_TRY(expr) for(ysResult YS_CAT(_ys_result,__LINE__)=(expr);YS_CAT(_ys_result,__LINE__)!=ysResult::Success;){return YS_CAT(_ys_result,__LINE__);}
+
 /// Type returned by the high-resolution timer.
 using ysTime = std::uint64_t;
 
