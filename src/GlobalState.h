@@ -6,7 +6,7 @@
 
 #include "Atomics.h"
 #include "Spinlock.h"
-#include "Event.h"
+#include "Signal.h"
 #include "WebsocketSink.h"
 
 #include <cstring>
@@ -18,7 +18,7 @@ class ThreadState;
 
 class GlobalState
 {
-	Event _signal;
+	Signal _signal;
 	AlignedAtomic<bool> _active;
 
 	Spinlock _stateLock;
@@ -41,7 +41,7 @@ public:
 	inline static GlobalState& instance();
 
 	ysResult Initialize(ysAllocator allocator);
-	bool IsActive() const;
+	bool IsActive() const { return _active.load(std::memory_order_relaxed); }
 	ysResult Shutdown();
 
 	ysResult ListenWebsocket(unsigned short port);
@@ -49,7 +49,7 @@ public:
 	void RegisterThread(ThreadState* thread);
 	void DeregisterThread(ThreadState* thread);
 
-	void PostThreadBuffer();
+	void PostThreadBuffer() { _signal.Post(); }
 };
 
 GlobalState& GlobalState::instance()

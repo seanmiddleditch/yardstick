@@ -27,11 +27,6 @@ ysResult GlobalState::Initialize(ysAllocator alloc)
 	return ysResult::Success;
 }
 
-bool GlobalState::IsActive() const
-{
-	return _active.load(std::memory_order_acquire);
-}
-
 ysResult GlobalState::Shutdown()
 {
 	LockGuard guard(_stateLock);
@@ -43,7 +38,7 @@ ysResult GlobalState::Shutdown()
 	_active.store(false, std::memory_order_release);
 	if (_backgroundThread.joinable())
 	{
-		_signal.Signal();
+		_signal.Post();
 		_backgroundThread.join();
 	}
 
@@ -104,9 +99,4 @@ void GlobalState::DeregisterThread(ThreadState* thread)
 		thread->_prev->_next = thread->_next;
 	if (_threads == thread)
 		_threads = _threads->_next;
-}
-
-void GlobalState::PostThreadBuffer()
-{
-	_signal.Signal();
 }
