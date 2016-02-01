@@ -78,7 +78,7 @@ void Signal::Wait(std::uint32_t microseconds)
 	_ready = false;
 }
 
-void Signal::Signal()
+void Signal::Post()
 {
 	_ready = 1;
 	_cond.notify_all();
