@@ -17,6 +17,7 @@ struct WebsocketSink::Session
 {
 	static constexpr std::size_t kBufSize = 4096;
 	static constexpr std::size_t kTableSize = 4096;
+	static constexpr std::size_t kTableBitMask = (kTableSize * 8) - 1;
 
 	// note: no constructor or destructor is called for this struct!
 	Session* _prev;
@@ -25,7 +26,7 @@ struct WebsocketSink::Session
 	WebbyConnection* _connection;
 	std::size_t _bufpos;
 	char* _buffer;
-	char* _table;
+	unsigned char* _table;
 };
 
 WebsocketSink::WebsocketSink()
@@ -117,13 +118,13 @@ WebsocketSink::Session* WebsocketSink::CreateSession(WebbyConnection* connection
 		return nullptr;
 	}
 
-	session->_table = (char*)_allocator(nullptr, Session::kTableSize);
+	session->_table = (unsigned char*)_allocator(nullptr, Session::kTableSize);
 	if (session->_table == nullptr)
 	{
 		DestroySession(session);
-		std::memset(session->_table, 0, Session::kTableSize);
 		return nullptr;
 	}
+	std::memset(session->_table, 0, Session::kTableSize);
 
 	_sessions = session;
 
@@ -166,14 +167,25 @@ ysResult WebsocketSink::WriteSessionBytes(Session* session, void const* buffer, 
 ysResult WebsocketSink::WriteSessionString(Session* session, char const* str)
 {
 	ysStringHandle const handle = hash_pointer(str);
+	std::uint32_t const index = handle & Session::kTableBitMask;
+	std::uint32_t const byteIndex = index >> 3;
+	std::uint32_t const bitMask = 1 << (index & 5);
 
-	WebbyBeginSocketFrame(session->_connection, WEBBY_WS_OP_BINARY_FRAME);
-	WebbyPrintf(session->_connection, "\x05");
-	WebbyWrite(session->_connection, &handle, sizeof(handle));
-	std::uint16_t const len = static_cast<std::uint16_t>(std::strlen(str));
-	WebbyWrite(session->_connection, &len, sizeof(len));
-	WebbyWrite(session->_connection, str, len);
-	WebbyEndSocketFrame(session->_connection);
+	unsigned char& byte = session->_table[byteIndex];
+
+	if ((byte & bitMask) == 0)
+	{
+		// #FIXME - this is too inefficient, even for how rarely this will hit
+		WebbyBeginSocketFrame(session->_connection, WEBBY_WS_OP_BINARY_FRAME);
+		WebbyPrintf(session->_connection, "\x05");
+		WebbyWrite(session->_connection, &handle, sizeof(handle));
+		std::uint16_t const len = static_cast<std::uint16_t>(std::strlen(str));
+		WebbyWrite(session->_connection, &len, sizeof(len));
+		WebbyWrite(session->_connection, str, len);
+		WebbyEndSocketFrame(session->_connection);
+
+		byte |= bitMask;
+	}
 	
 	return ysResult::Success;
 }
