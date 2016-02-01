@@ -6,6 +6,7 @@
 			frames: 0,
 			bytes: 0
 		};
+		this.strings = {};
 	};
 	
 	var ys = window.Ys.prototype;
@@ -25,7 +26,14 @@
 				cbs[i](data);
 		}
 	};
-
+	
+	ys.tostr = function(id){
+		if (id in this.strings)
+			return this.strings[id];
+		else
+			return '['+id+']';
+	};
+	
 	// extend DataView to support reading 64-bit unsigned ints,
 	// cast into native JS numbers (doubles). This isn't going to
 	// work for every U64 one might need, but it works for our
@@ -62,8 +70,8 @@
 			case 3 /*REGION*/:
 				var ev = {
 					line: data.getUint32(pos + 1, true),
-					file: data.getUint32(pos + 5, true),
-					name: data.getUint32(pos + 9, true),
+					name: data.getUint32(pos + 5, true),
+					file: data.getUint32(pos + 9, true),
 					start: data.getUint64(pos + 13, true),
 					end: data.getUint64(pos + 21, true)
 				};
@@ -72,13 +80,22 @@
 			case 4 /*COUNTER*/:
 				var ev = {
 					line: data.getUint32(pos + 1, true),
-					file: data.getUint32(pos + 5, true),
-					name: data.getUint32(pos + 9, true),
+					name: data.getUint32(pos + 5, true),
+					file: data.getUint32(pos + 9, true),
 					when: data.getUint64(pos + 13, true),
 					value: data.getFloat64(pos + 21, true)
 				};
 				ys.emit('counter', ev);
 				return 29;
+			case 5 /*STRING*/:
+				var id = data.getUint32(pos + 1, true);
+				var len = data.getUint16(pos + 5, true);
+				// yup, pretty terrible
+				var str = '';
+				for (var i = 0; i != len; ++i)
+					str += String.fromCharCode(data.getUint8(pos + 7 + i));
+				ys.strings[id] = str;
+				return 7 + len;
 			default /*NONE or Unknown*/:
 				console.log('UNKNOWN(pos=', pos, ' type=', type, ')');
 				return data.byteLength;

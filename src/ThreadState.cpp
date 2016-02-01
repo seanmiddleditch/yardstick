@@ -15,7 +15,7 @@ ThreadState::~ThreadState()
 	GlobalState::instance().DeregisterThread(this);
 }
 
-void ThreadState::Enque(ysEvent const& ev)
+void ThreadState::Enque(EventData const& ev)
 {
 	GlobalState& gs = GlobalState::instance();
 	
@@ -27,7 +27,7 @@ void ThreadState::Enque(ysEvent const& ev)
 	}
 }
 
-bool ThreadState::Deque(ysEvent& out_ev)
+bool ThreadState::Deque(EventData& out_ev)
 {
 	return _queue.TryDeque(out_ev);
 }

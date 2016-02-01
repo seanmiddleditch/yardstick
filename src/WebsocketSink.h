@@ -8,6 +8,8 @@
 
 namespace _ys_ {
 
+struct EventData;
+
 class WebsocketSink
 {
 	struct Session;
@@ -28,9 +30,13 @@ class WebsocketSink
 	static int webby_frame(struct WebbyConnection *connection, const struct WebbyWsFrame *frame);
 
 	Session* CreateSession(WebbyConnection* connection);
-	void DestroySession(WebbyConnection* connection);
+	Session* FindSession(WebbyConnection* connection);
+	void DestroySession(Session* session);
 
-	ysResult WriteEvent(Session* session, ysEvent const& ev);
+	ysResult WriteSessionBytes(Session* session, void const* buffer, std::size_t size);
+	ysResult WriteSessionString(Session* session, char const* str);
+	ysResult WriteSessionEvent(Session* session, EventData const& ev);
+	ysResult FlushSession(Session* session);
 
 public:
 	WebsocketSink();
@@ -43,7 +49,7 @@ public:
 	ysResult Close();
 	
 	ysResult Update();
-	ysResult WriteEvent(ysEvent const& ev);
+	ysResult WriteEvent(EventData const& ev);
 	ysResult Flush();
 };
 

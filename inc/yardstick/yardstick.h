@@ -72,41 +72,6 @@ enum class ysResult : std::uint8_t
 	AlreadyInitialized,
 };
 
-/// Protocol event
-struct ysEvent
-{
-	enum { TypeNone = 0, TypeHeader = 1, TypeTick = 2, TypeRegion = 3, TypeCounter = 4 } type;
-	union
-	{
-		struct
-		{
-			ysTime frequency;
-		} header;
-		struct
-		{
-			ysTime when;
-		} tick;
-		struct
-		{
-			std::uint32_t line;
-			ysStringHandle name;
-			ysStringHandle file;
-			ysTime begin;
-			ysTime end;
-		} region;
-		struct
-		{
-			std::uint32_t line;
-			ysStringHandle name;
-			ysStringHandle file;
-			ysTime when;
-			double value;
-		} counter;
-	};
-};
-
-using ysCallback = void(YS_CALL*)(ysEvent const& ev, void* userdata);
-
 // ---- Public Macros ----
 
 #if !defined(NO_YS)
@@ -116,8 +81,6 @@ using ysCallback = void(YS_CALL*)(ysEvent const& ev, void* userdata);
 #	define ysShutdown() (::_ys_::shutdown())
 #	define ysTick() (::_ys_::tick())
 #	define ysListenWeb(port) (::_ys_::listen_web((port)))
-#	define ysAddCallback(callback, userdata) (::_ys_::add_callback((callback), (userdata)))
-#	define ysRemoveCallback(callback, userdata) (::_ys_::remove_callback((callback), (userdata)))
 
   /// Marks the current scope as being in a region, and automatically closes the region at the end of the scope.
 #	define ysProfile(name) \
@@ -135,8 +98,6 @@ using ysCallback = void(YS_CALL*)(ysEvent const& ev, void* userdata);
 #	define ysProfile(name) do{YS_IGNORE((name));}while(false)
 #	define ysCounter(name, value) (YS_IGNORE((name)),YS_IGNORE((value)),::ysResult::Disabled)
 #	define ysListenWeb(port) (YS_IGNORE((port)),::ysResult::Disabled)
-#	define ysAddCallback(callback, userdata) (YS_IGNORE((callback)),::ysResult::Disabled)
-#	define ysRemoveCallback(callback, userdata) (YS_IGNORE((callback)),YS_IGNORE((userdata)),::ysResult::Disabled)
 
 #endif // !defined(NO_YS)
 
@@ -146,7 +107,6 @@ using ysCallback = void(YS_CALL*)(ysEvent const& ev, void* userdata);
 
 namespace _ys_
 {
-
 	/// Initializes the Yardstick library.
 	/// Must be called before any other Yardstick function.
 	/// @param allocator Custom allocator to override the default.
@@ -172,20 +132,6 @@ namespace _ys_
 	/// Emit a region.
 	/// @internal
 	YS_API ysResult YS_CALL emit_region(ysTime startTime, ysTime endTime, char const* name, char const* file, int line);
-
-	/// Emits an event from the current thread.
-	YS_API ysResult YS_CALL emit_event(ysEvent const& ev);
-
-	/// <summary> Writes an event into a buffer. </summary>
-	/// <param name="out_buffer"> [in,out] The position of a buffer to write the event into. </param>
-	/// <param name="bufLen"> Length of the buffer from the given position. </param>
-	/// <param name="ev"> The evevent to be written. </param>
-	/// <param name="out_length"> [in,out] Number of bytes written into the buffer. </param>
-	/// <returns> ysResult::NoMemory if the buffer is not big enough, otherwise ysResult::Success. </returns>
-	YS_API ysResult YS_CALL write_event(void* out_buffer, std::size_t bufLen, ysEvent const& ev, std::size_t& out_length);
-
-	/// Parses an event out of a buffer.
-	YS_API ysResult YS_CALL read_event(ysEvent& out_ev, std::size_t& out_len, void const* buffer, std::size_t available);
 
 	/// Read the current clock value.
 	/// @internal

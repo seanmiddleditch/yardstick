@@ -9,37 +9,37 @@
 
 namespace _ys_ {
 
-class Event
+class Signal
 {
 	HANDLE _handle = nullptr;
 
 public:
-	inline Event();
-	inline ~Event();
+	inline Signal();
+	inline ~Signal();
 
-	Event(Event const&) = delete;
-	Event& operator=(Event const&) = delete;
+	Signal(Signal const&) = delete;
+	Signal& operator=(Signal const&) = delete;
 
 	inline void Wait(std::uint32_t microseconds);
-	inline void Signal();
+	inline void Post();
 };
 
-Event::Event()
+Signal::Signal()
 {
 	_handle = CreateEventW(nullptr, TRUE, FALSE, nullptr);
 }
 
-Event::~Event()
+Signal::~Signal()
 {
 	CloseHandle(_handle);
 }
 
-void Event::Wait(std::uint32_t microseconds)
+void Signal::Wait(std::uint32_t microseconds)
 {
 	WaitForSingleObject(_handle, static_cast<DWORD>(microseconds));
 }
 
-void Event::Signal()
+void Signal::Post()
 {
 	PulseEvent(_handle);
 }
@@ -54,31 +54,31 @@ void Event::Signal()
 
 namespace _ys_ {
 
-class Event
+class Signal
 {
 	std::mutex _mutex;
 	std::condition_variable _cond;
 	std::atomic<int> _ready;
 
 public:
-  Event() : _ready(0) {}
-	~Event() = default;
+  Signal() : _ready(0) {}
+	~Signal() = default;
 
-	Event(Event const&) = delete;
-	Event& operator=(Event const&) = delete;
+	Signal(Signal const&) = delete;
+	Signal& operator=(Signal const&) = delete;
 
 	inline void Wait(std::uint32_t microseconds);
 	inline void Signal();
 };
 
-void Event::Wait(std::uint32_t microseconds)
+void Signal::Wait(std::uint32_t microseconds)
 {
 	std::unique_lock<std::mutex> guard(_mutex);
 	_cond.wait_for(guard, std::chrono::microseconds(microseconds), [this](){ return _ready.load(); });
 	_ready = false;
 }
 
-void Event::Signal()
+void Signal::Signal()
 {
 	_ready = 1;
 	_cond.notify_all();

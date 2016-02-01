@@ -3,9 +3,18 @@
 #include "GlobalState.h"
 #include "ThreadState.h"
 #include "Clock.h"
-#include "PointerHash.h"
 
 using namespace _ys_;
+
+namespace
+{
+	ysResult EmitEvent(EventData const& ev)
+	{
+		ThreadState& thrd = ThreadState::thread_instance();
+		thrd.Enque(ev);
+		return ysResult::Success;
+	}
+}
 
 ysResult YS_API _ys_::initialize(ysAllocator allocator)
 {
@@ -17,36 +26,28 @@ ysResult YS_API _ys_::shutdown()
 	return GlobalState::instance().Shutdown();
 }
 
-YS_API ysResult YS_CALL _ys_::emit_event(ysEvent const& ev)
-{
-	ThreadState& thrd = ThreadState::thread_instance();
-	thrd.Enque(ev);
-	return ysResult::Success;
-}
-
 YS_API ysResult YS_CALL _ys_::emit_counter(ysTime when, double value, char const* name, char const* file, int line)
 {
-	ysEvent ev;
-	ev.type = ysEvent::TypeCounter;
+	EventData ev;
+	ev.type = EventData::TypeCounter;
 	ev.counter.line = line;
-	ev.counter.name = hash_pointer(name);
-	ev.counter.file = hash_pointer(file);
+	ev.counter.name = name;
+	ev.counter.file = file;
 	ev.counter.when = when;
 	ev.counter.value = value;
-	return emit_event(ev);
+	return EmitEvent(ev);
 }
 
 YS_API ysResult YS_CALL _ys_::emit_region(ysTime startTime, ysTime endTime, char const* name, char const* file, int line)
 {
-	ysEvent ev;
-	ev.type = ysEvent::TypeRegion;
+	EventData ev;
+	ev.type = EventData::TypeRegion;
 	ev.region.line = line;
-	ev.region.name = hash_pointer(name);
-	ev.region.file = hash_pointer(name);
+	ev.region.name = name;
+	ev.region.file = file;
 	ev.region.begin = startTime;
 	ev.region.end = endTime;
-	return ysResult::Success;
-	return emit_event(ev);
+	return EmitEvent(ev);
 }
 
 YS_API ysTime YS_CALL _ys_::read_clock()
@@ -56,10 +57,10 @@ YS_API ysTime YS_CALL _ys_::read_clock()
 
 YS_API ysResult YS_CALL _ys_::tick()
 {
-	ysEvent ev;
-	ev.type = ysEvent::TypeTick;
+	EventData ev;
+	ev.type = EventData::TypeTick;
 	ev.tick.when = ReadClock();
-	return emit_event(ev);
+	return EmitEvent(ev);
 }
 
 YS_API ysResult YS_CALL _ys_::listen_web(unsigned short port)

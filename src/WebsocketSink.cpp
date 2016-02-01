@@ -2,6 +2,8 @@
 
 #include "WebsocketSink.h"
 #include "Clock.h"
+#include "PointerHash.h"
+#include "Protocol.h"
 #include <cstring>
 #include <allocators>
 
@@ -13,11 +15,18 @@ using namespace _ys_;
 
 struct WebsocketSink::Session
 {
+	static constexpr std::size_t kBufSize = 4096;
+	static constexpr std::size_t kTableSize = 4096;
+	static constexpr std::size_t kTableBitMask = (kTableSize * 8) - 1;
+
 	// note: no constructor or destructor is called for this struct!
 	Session* _prev;
 	Session* _next;
 	WebsocketSink* _sink;
 	WebbyConnection* _connection;
+	std::size_t _bufpos;
+	char* _buffer;
+	unsigned char* _table;
 };
 
 WebsocketSink::WebsocketSink()
@@ -63,22 +72,23 @@ void WebsocketSink::webby_connected(struct WebbyConnection* connection)
 	if (session == nullptr)
 		return;
 
-	ysEvent ev;
-	ev.type = ysEvent::TypeHeader;
+	EventData ev;
+	ev.type = EventData::TypeHeader;
 	ev.header.frequency = GetClockFrequency();
 
-	sink.WriteEvent(session, ev);
+	sink.WriteSessionEvent(session, ev);
 }
 
 void WebsocketSink::webby_closed(struct WebbyConnection* connection)
 {
 	WebsocketSink& sink = *static_cast<WebsocketSink*>(connection->user_data);
-	sink.DestroySession(connection);
+	sink.DestroySession(sink.FindSession(connection));
 }
 
 int WebsocketSink::webby_frame(struct WebbyConnection* connection, const struct WebbyWsFrame* frame)
 {
 	WebsocketSink& sink = *static_cast<WebsocketSink*>(connection->user_data);
+	Session* session = sink.FindSession(connection);
 
 	char buffer[1024];
 	auto const len = WebbyRead(connection, buffer, sizeof(buffer));
@@ -99,40 +109,122 @@ WebsocketSink::Session* WebsocketSink::CreateSession(WebbyConnection* connection
 	session->_prev = nullptr;
 	session->_sink = this;
 	session->_connection = connection;
+	session->_bufpos = 0;
+
+	session->_buffer = (char*)_allocator(nullptr, Session::kBufSize);
+	if (session->_buffer == nullptr)
+	{
+		DestroySession(session);
+		return nullptr;
+	}
+
+	session->_table = (unsigned char*)_allocator(nullptr, Session::kTableSize);
+	if (session->_table == nullptr)
+	{
+		DestroySession(session);
+		return nullptr;
+	}
+	std::memset(session->_table, 0, Session::kTableSize);
 
 	_sessions = session;
 
 	return session;
 }
 
-void WebsocketSink::DestroySession(WebbyConnection* connection)
+WebsocketSink::Session* WebsocketSink::FindSession(WebbyConnection* connection)
 {
-	Session* session = _sessions;
-	while (session != nullptr && session->_connection == connection)
-		session = session->_next;
-
-	if (session != nullptr)
-	{
-		if (session->_next != nullptr)
-			session->_next->_prev = session->_prev;
-		if (session->_prev != nullptr)
-			session->_prev->_next = session->_next;
-		if (_sessions == session)
-			_sessions = session->_next;
-
-		_allocator(session, 0);
-	}
+	for (Session* session = _sessions; session != nullptr; session = session->_next)
+		if (session->_connection == connection)
+			return session;
+	return nullptr;
 }
 
-ysResult WebsocketSink::WriteEvent(Session* session, ysEvent const& ev)
+void WebsocketSink::DestroySession(Session* session)
 {
+	if (session->_next != nullptr)
+		session->_next->_prev = session->_prev;
+	if (session->_prev != nullptr)
+		session->_prev->_next = session->_next;
+	if (_sessions == session)
+		_sessions = session->_next;
+
+	_allocator(session->_buffer, 0);
+	_allocator(session, 0);
+}
+
+ysResult WebsocketSink::WriteSessionBytes(Session* session, void const* buffer, std::size_t size)
+{
+	// flush the outgoing buffer if it's full
+	if (session->_bufpos + size > Session::kBufSize)
+		YS_TRY(FlushSession(session));
+
+	std::memcpy(session->_buffer + session->_bufpos, buffer, size);
+	session->_bufpos += size;
+
+	return ysResult::Success;
+}
+
+ysResult WebsocketSink::WriteSessionString(Session* session, char const* str)
+{
+	ysStringHandle const handle = hash_pointer(str);
+	std::uint32_t const index = handle & Session::kTableBitMask;
+	std::uint32_t const byteIndex = index >> 3;
+	std::uint32_t const bitMask = 1 << (index & 5);
+
+	unsigned char& byte = session->_table[byteIndex];
+
+	if ((byte & bitMask) == 0)
+	{
+		// #FIXME - this is too inefficient, even for how rarely this will hit
+		WebbyBeginSocketFrame(session->_connection, WEBBY_WS_OP_BINARY_FRAME);
+		WebbyPrintf(session->_connection, "\x05");
+		WebbyWrite(session->_connection, &handle, sizeof(handle));
+		std::uint16_t const len = static_cast<std::uint16_t>(std::strlen(str));
+		WebbyWrite(session->_connection, &len, sizeof(len));
+		WebbyWrite(session->_connection, str, len);
+		WebbyEndSocketFrame(session->_connection);
+
+		byte |= bitMask;
+	}
+	
+	return ysResult::Success;
+}
+
+ysResult WebsocketSink::WriteSessionEvent(Session* session, EventData const& ev)
+{
+	// flush any strings
+	switch (ev.type)
+	{
+	case EventData::TypeRegion:
+		YS_TRY(WriteSessionString(session, ev.region.name));
+		YS_TRY(WriteSessionString(session, ev.region.file));
+		break;
+	case EventData::TypeCounter:
+		YS_TRY(WriteSessionString(session, ev.counter.name));
+		YS_TRY(WriteSessionString(session, ev.counter.file));
+		break;
+	case EventData::TypeString:
+		// #FIXME - what do we even do here?
+		break;
+	default: break;
+	}
+
 	char buffer[64];
 	std::size_t length;
-	YS_TRY(write_event(buffer, sizeof(buffer), ev, length));
+	YS_TRY(EncodeEvent(buffer, sizeof(buffer), ev, length));
 
-	WebbyBeginSocketFrame(session->_connection, WEBBY_WS_OP_BINARY_FRAME);
-	WebbyWrite(session->_connection, buffer, length);
-	WebbyEndSocketFrame(session->_connection);
+	return WriteSessionBytes(session, buffer, length);
+}
+
+ysResult WebsocketSink::FlushSession(Session* session)
+{
+	if (session->_bufpos != 0)
+	{
+		WebbyBeginSocketFrame(session->_connection, WEBBY_WS_OP_BINARY_FRAME);
+		WebbyWrite(session->_connection, session->_buffer, session->_bufpos);
+		WebbyEndSocketFrame(session->_connection);
+		session->_bufpos = 0;
+	}
 
 	return ysResult::Success;
 }
@@ -192,11 +284,7 @@ ysResult WebsocketSink::Close()
 		_allocator(_memory, 0);
 
 	while (_sessions != nullptr)
-	{
-		Session* tmp = _sessions->_next;
-		_allocator(_sessions, 0);
-		_sessions = tmp;
-	}
+		DestroySession(_sessions);
 
 	return ysResult::Success;
 }
@@ -206,6 +294,7 @@ ysResult WebsocketSink::Update()
 	if (_server != nullptr)
 	{
 		WebbyServerUpdate(_server);
+		Flush();
 		return ysResult::Success;
 	}
 	else
@@ -214,10 +303,19 @@ ysResult WebsocketSink::Update()
 	}
 }
 
-ysResult WebsocketSink::WriteEvent(ysEvent const& ev)
+ysResult WebsocketSink::Flush()
 {
 	for (Session* session = _sessions; session != nullptr; session = session->_next)
-		WriteEvent(session, ev);
+		FlushSession(session);
+
+	return ysResult::Success;
+
+}
+
+ysResult WebsocketSink::WriteEvent(EventData const& ev)
+{
+	for (Session* session = _sessions; session != nullptr; session = session->_next)
+		WriteSessionEvent(session, ev);
 
 	return ysResult::Success;
 }

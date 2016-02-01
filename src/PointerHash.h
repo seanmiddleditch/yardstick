@@ -45,6 +45,6 @@ struct _hash_pointer_impl<8>
 	}
 };
 
-std::uint32_t hash_pointer(void const* ptr) { return _hash_pointer_impl<sizeof(ptr)>::hash(reinterpret_cast<std::size_t>(ptr)); }
+static inline std::uint32_t hash_pointer(void const* ptr) { return _hash_pointer_impl<sizeof(ptr)>::hash(reinterpret_cast<std::size_t>(ptr)); }
 
 } // namespace _ys_
