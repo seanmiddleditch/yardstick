@@ -2,23 +2,23 @@
 <html>
 	<head>
 		<title>Yardstick</title>
+		<link rel="stylesheet" type="text/css" href="css/ysView.css"/>
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/canvasjs/1.7.0/canvasjs.min.js" type="text/javascript"></script>
 		<script src="js/ys.js" type="text/javascript"></script>
 		<script src="js/ysView.js" type="text/javascript"></script>
 		<script type="text/javascript">
 			window.onload = function(){
 				var ys = new Ys(); ys.connect(5760);
-				var ysView = new YsView(ys);
+				var ysView = new YsView(ys, {
+					stats: document.getElementById('stats'),
+					graph: document.getElementById('chart'),
+					legend: document.getElementById('legend'),
+				});
 			}
 		</script>
 	</head>
 	<body>
-		<div><b>Timers</b></div>
-		<div id="timers"></div>
-			
-		<div><b>Counters</b></div>
-		<div id="counters"></div>
-		
-		<div><b>Stats</b></div>
-		<div id="stats"></div>
+		<div id="chart"></div>
+		<div id="stats" class="grid"></div>
 	</body>
 </html>

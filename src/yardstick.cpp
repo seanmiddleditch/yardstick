@@ -29,7 +29,7 @@ ysResult YS_API _ys_::shutdown()
 YS_API ysResult YS_CALL _ys_::emit_counter(ysTime when, double value, char const* name, char const* file, int line)
 {
 	EventData ev;
-	ev.type = EventData::TypeCounter;
+	ev.type = EventType::Counter;
 	ev.counter.line = line;
 	ev.counter.name = name;
 	ev.counter.file = file;
@@ -41,7 +41,7 @@ YS_API ysResult YS_CALL _ys_::emit_counter(ysTime when, double value, char const
 YS_API ysResult YS_CALL _ys_::emit_region(ysTime startTime, ysTime endTime, char const* name, char const* file, int line)
 {
 	EventData ev;
-	ev.type = EventData::TypeRegion;
+	ev.type = EventType::Region;
 	ev.region.line = line;
 	ev.region.name = name;
 	ev.region.file = file;
@@ -58,7 +58,7 @@ YS_API ysTime YS_CALL _ys_::read_clock()
 YS_API ysResult YS_CALL _ys_::tick()
 {
 	EventData ev;
-	ev.type = EventData::TypeTick;
+	ev.type = EventType::Tick;
 	ev.tick.when = ReadClock();
 	return EmitEvent(ev);
 }

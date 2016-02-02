@@ -4,9 +4,11 @@
 
 namespace _ys_ {
 
+enum class EventType : std::uint8_t { None = 0, Header = 1, Tick = 2, Region = 3, Counter = 4, String = 5 };
+
 struct EventData
 {
-	enum { TypeNone = 0, TypeHeader = 1, TypeTick = 2, TypeRegion = 3, TypeCounter = 4, TypeString = 5 } type;
+	EventType type;
 	union
 	{
 		struct
@@ -49,5 +51,8 @@ struct EventData
 /// <param name="out_length"> [in,out] Number of bytes written into the buffer. </param>
 /// <returns> ysResult::NoMemory if the buffer is not big enough, otherwise ysResult::Success. </returns>
 ysResult EncodeEvent(void* out_buffer, std::size_t available, EventData const& ev, std::size_t& out_length);
+
+/// <summary> Returns the amount of space needed to encode an event. </summary>
+std::size_t EncodeSize(EventData const& ev);
 
 } // namespace _ys_

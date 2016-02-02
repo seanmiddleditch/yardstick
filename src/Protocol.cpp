@@ -1,10 +1,11 @@
 /* Copyright (C) 2016 Sean Middleditch, all rights reserverd. */
 
-#include "yardstick/yardstick.h"
+#include <yardstick/yardstick.h>
 
-#include "ThreadState.h"
-#include "GlobalState.h"
+#include "Protocol.h"
 #include "PointerHash.h"
+
+#include <cstring>
 
 using namespace _ys_;
 
@@ -58,36 +59,58 @@ ysResult _ys_::EncodeEvent(void* out_buffer, std::size_t available, EventData co
 
 	switch (ev.type)
 	{
-	case EventData::TypeNone:
+	case EventType::None:
 		break;
-	case EventData::TypeHeader:
+	case EventType::Header:
 		TRY_WRITE(ev.header.frequency);
 		break;
-	case EventData::TypeTick:
+	case EventType::Tick:
 		TRY_WRITE(ev.tick.when);
 		break;
-	case EventData::TypeRegion:
+	case EventType::Region:
 		TRY_WRITE(ev.region.line);
 		TRY_WRITE(hash_pointer(ev.region.name));
 		TRY_WRITE(hash_pointer(ev.region.file));
 		TRY_WRITE(ev.region.begin);
 		TRY_WRITE(ev.region.end);
 		break;
-	case EventData::TypeCounter:
+	case EventType::Counter:
 		TRY_WRITE(ev.counter.line);
 		TRY_WRITE(hash_pointer(ev.counter.name));
 		TRY_WRITE(hash_pointer(ev.counter.file));
 		TRY_WRITE(ev.counter.when);
 		TRY_WRITE(ev.counter.value);
 		break;
-	case EventData::TypeString:
+	case EventType::String:
 		TRY_WRITE(ev.string.id);
 		TRY_WRITE(ev.string.size);
 		std::memcpy(static_cast<char*>(out_buffer) + out_length, ev.string.str, ev.string.size);
+		out_length += ev.string.size;
 		break;
 	}
 
 	return ysResult::Success;
+}
+
+std::size_t _ys_::EncodeSize(EventData const& ev)
+{
+	switch (ev.type)
+	{
+	case EventType::None:
+		return 1/*type*/;
+	case EventType::Header:
+		return 1/*type*/ + 8/*frequency*/;
+	case EventType::Tick:
+		return 1/*type*/ + 8/*time*/;
+	case EventType::Region:
+		return 1/*type*/ + 4/*line*/ + 4/*name*/ + 4/*file*/ + 8/*start*/ + 8/*end*/;
+	case EventType::Counter:
+		return 1/*type*/ + 4/*line*/ + 4/*name*/ + 4/*file*/ + 8/*time*/ + 8/*value*/;
+	case EventType::String:
+		return 1/*type*/ + 4/*id*/ + 2/*size*/ + ev.string.size/*data*/;
+	default:
+		return std::size_t(-1);
+	}
 }
 
 //YS_API ysResult YS_CALL read_event(ysEvent& out_ev, void const* buffer, std::size_t available, ysStringMapper mapper, std::size_t& out_length)

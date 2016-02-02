@@ -5,7 +5,7 @@
 #include "PointerHash.h"
 #include "Protocol.h"
 #include <cstring>
-#include <allocators>
+#include <new>
 
 #ifdef _WIN32
 #	include <winsock2.h>
@@ -73,9 +73,12 @@ void WebsocketSink::webby_connected(struct WebbyConnection* connection)
 		return;
 
 	EventData ev;
-	ev.type = EventData::TypeHeader;
+	ev.type = EventType::Header;
 	ev.header.frequency = GetClockFrequency();
+	sink.WriteSessionEvent(session, ev);
 
+	ev.type = EventType::Tick;
+	ev.tick.when = ReadClock();
 	sink.WriteSessionEvent(session, ev);
 }
 
@@ -152,18 +155,6 @@ void WebsocketSink::DestroySession(Session* session)
 	_allocator(session, 0);
 }
 
-ysResult WebsocketSink::WriteSessionBytes(Session* session, void const* buffer, std::size_t size)
-{
-	// flush the outgoing buffer if it's full
-	if (session->_bufpos + size > Session::kBufSize)
-		YS_TRY(FlushSession(session));
-
-	std::memcpy(session->_buffer + session->_bufpos, buffer, size);
-	session->_bufpos += size;
-
-	return ysResult::Success;
-}
-
 ysResult WebsocketSink::WriteSessionString(Session* session, char const* str)
 {
 	ysStringHandle const handle = hash_pointer(str);
@@ -175,14 +166,32 @@ ysResult WebsocketSink::WriteSessionString(Session* session, char const* str)
 
 	if ((byte & bitMask) == 0)
 	{
-		// #FIXME - this is too inefficient, even for how rarely this will hit
-		WebbyBeginSocketFrame(session->_connection, WEBBY_WS_OP_BINARY_FRAME);
-		WebbyPrintf(session->_connection, "\x05");
-		WebbyWrite(session->_connection, &handle, sizeof(handle));
-		std::uint16_t const len = static_cast<std::uint16_t>(std::strlen(str));
-		WebbyWrite(session->_connection, &len, sizeof(len));
-		WebbyWrite(session->_connection, str, len);
-		WebbyEndSocketFrame(session->_connection);
+		EventData ev;
+		ev.type = EventType::String;
+		ev.string.id = handle;
+		ev.string.size = static_cast<std::uint16_t>(std::strlen(str));
+		ev.string.str = str;
+
+		std::size_t const size = EncodeSize(ev);
+		if (size > Session::kBufSize - session->_bufpos)
+			YS_TRY(FlushSession(session));
+
+		if (size <= Session::kBufSize - session->_bufpos)
+		{
+			std::size_t written;
+			YS_TRY(EncodeEvent(session->_buffer + session->_bufpos, Session::kBufSize - session->_bufpos, ev, written));
+			session->_bufpos += written;
+		}
+		else
+		{
+			// #FIXME - we can optimize this at least a little
+			WebbyBeginSocketFrame(session->_connection, WEBBY_WS_OP_BINARY_FRAME);
+			WebbyPrintf(session->_connection, "\x05");
+			WebbyWrite(session->_connection, &handle, sizeof(handle));
+			WebbyWrite(session->_connection, &ev.string.size, sizeof(ev.string.size));
+			WebbyWrite(session->_connection, str, ev.string.size);
+			WebbyEndSocketFrame(session->_connection);
+		}
 
 		byte |= bitMask;
 	}
@@ -195,25 +204,28 @@ ysResult WebsocketSink::WriteSessionEvent(Session* session, EventData const& ev)
 	// flush any strings
 	switch (ev.type)
 	{
-	case EventData::TypeRegion:
+	case EventType::Region:
 		YS_TRY(WriteSessionString(session, ev.region.name));
 		YS_TRY(WriteSessionString(session, ev.region.file));
 		break;
-	case EventData::TypeCounter:
+	case EventType::Counter:
 		YS_TRY(WriteSessionString(session, ev.counter.name));
 		YS_TRY(WriteSessionString(session, ev.counter.file));
 		break;
-	case EventData::TypeString:
+	case EventType::String:
 		// #FIXME - what do we even do here?
 		break;
 	default: break;
 	}
 
-	char buffer[64];
-	std::size_t length;
-	YS_TRY(EncodeEvent(buffer, sizeof(buffer), ev, length));
+	std::size_t length = EncodeSize(ev);
+	if (length > Session::kBufSize - session->_bufpos)
+		YS_TRY(FlushSession(session));
 
-	return WriteSessionBytes(session, buffer, length);
+	YS_TRY(EncodeEvent(session->_buffer + session->_bufpos, Session::kBufSize - session->_bufpos, ev, length));
+	session->_bufpos += length;
+
+	return ysResult::Success;
 }
 
 ysResult WebsocketSink::FlushSession(Session* session)

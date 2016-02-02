@@ -33,7 +33,6 @@ class WebsocketSink
 	Session* FindSession(WebbyConnection* connection);
 	void DestroySession(Session* session);
 
-	ysResult WriteSessionBytes(Session* session, void const* buffer, std::size_t size);
 	ysResult WriteSessionString(Session* session, char const* str);
 	ysResult WriteSessionEvent(Session* session, EventData const& ev);
 	ysResult FlushSession(Session* session);

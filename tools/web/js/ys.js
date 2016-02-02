@@ -47,7 +47,6 @@
 			else
 				return '['+id+']';
 		};
-
 		
 		function parseEvent(data, pos){
 			++this.stats.events;
