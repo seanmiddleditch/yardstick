@@ -3,6 +3,7 @@
 #include "GlobalState.h"
 #include "Algorithm.h"
 #include "ThreadState.h"
+#include "Clock.h"
 
 using namespace _ys_;
 
@@ -34,8 +35,10 @@ ysResult GlobalState::Shutdown()
 	if (!_active.load(std::memory_order_acquire))
 		return ysResult::Uninitialized;
 
-	// wait for background thread to complete
+	// do this first, so other systems know to stop trying to update things
 	_active.store(false, std::memory_order_release);
+
+	// wait for background thread to complete
 	if (_backgroundThread.joinable())
 	{
 		_signal.Post();
@@ -63,20 +66,26 @@ void GlobalState::ThreadMain()
 	{
 		_signal.Wait(100);
 
-		LockGuard guard(_threadsLock);
-		for (ThreadState* thread = _threads; thread != nullptr; thread = thread->_next)
-			ProcessThread(thread);
-
-		_websocketSink.Update();
+		Flush();
 	}
 }
 
-void GlobalState::ProcessThread(ThreadState* thread)
+ysResult GlobalState::ProcessThread(ThreadState* thread)
 {
 	EventData ev;
 	int count = 512;
 	while (--count && thread->Deque(ev))
-		_websocketSink.WriteEvent(ev);
+		YS_TRY(_websocketSink.WriteEvent(ev));
+	return ysResult::Success;
+}
+
+ysResult GlobalState::Flush()
+{
+	LockGuard guard(_threadsLock);
+	for (ThreadState* thread = _threads; thread != nullptr; thread = thread->_next)
+		YS_TRY(ProcessThread(thread));
+
+	return _websocketSink.Update();
 }
 
 void GlobalState::RegisterThread(ThreadState* thread)
@@ -99,4 +108,16 @@ void GlobalState::DeregisterThread(ThreadState* thread)
 		thread->_prev->_next = thread->_next;
 	if (_threads == thread)
 		_threads = _threads->_next;
+}
+
+ysResult GlobalState::Tick()
+{
+	Flush();
+
+	EventData ev;
+	ev.type = EventType::Tick;
+	ev.tick.when = ReadClock();
+	YS_TRY(_websocketSink.WriteEvent(ev));
+
+	return _websocketSink.Flush();
 }

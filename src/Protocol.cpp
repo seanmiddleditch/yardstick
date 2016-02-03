@@ -75,18 +75,22 @@ ysResult _ys_::EncodeEvent(void* out_buffer, std::size_t available, EventData co
 		TRY_WRITE(ev.region.begin);
 		TRY_WRITE(ev.region.end);
 		break;
-	case EventType::Counter:
-		TRY_WRITE(ev.counter.line);
-		TRY_WRITE(hash_pointer(ev.counter.name));
-		TRY_WRITE(hash_pointer(ev.counter.file));
-		TRY_WRITE(ev.counter.when);
-		TRY_WRITE(ev.counter.value);
+	case EventType::Record:
+		TRY_WRITE(ev.record.line);
+		TRY_WRITE(hash_pointer(ev.record.name));
+		TRY_WRITE(hash_pointer(ev.record.file));
+		TRY_WRITE(ev.record.when);
+		TRY_WRITE(ev.record.value);
 		break;
 	case EventType::String:
 		TRY_WRITE(ev.string.id);
 		TRY_WRITE(ev.string.size);
 		std::memcpy(static_cast<char*>(out_buffer) + out_length, ev.string.str, ev.string.size);
 		out_length += ev.string.size;
+		break;
+	case EventType::Count:
+		TRY_WRITE(hash_pointer(ev.count.name));
+		TRY_WRITE(ev.count.amount);
 		break;
 	}
 
@@ -105,10 +109,12 @@ std::size_t _ys_::EncodeSize(EventData const& ev)
 		return 1/*type*/ + 8/*time*/;
 	case EventType::Region:
 		return 1/*type*/ + 4/*line*/ + 4/*name*/ + 4/*file*/ + 8/*start*/ + 8/*end*/;
-	case EventType::Counter:
+	case EventType::Record:
 		return 1/*type*/ + 4/*line*/ + 4/*name*/ + 4/*file*/ + 8/*time*/ + 8/*value*/;
 	case EventType::String:
 		return 1/*type*/ + 4/*id*/ + 2/*size*/ + ev.string.size/*data*/;
+	case EventType::Count:
+		return 1/*type*/ + 4/*name*/ + 8/*amount*/;
 	default:
 		return std::size_t(-1);
 	}

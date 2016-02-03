@@ -31,7 +31,8 @@ class GlobalState
 	WebsocketSink _websocketSink;
 
 	void ThreadMain();
-	void ProcessThread(ThreadState* thread);
+	ysResult ProcessThread(ThreadState* thread);
+	ysResult Flush();
 
 public:
 	GlobalState() : _active(false) {}
@@ -50,6 +51,8 @@ public:
 	void DeregisterThread(ThreadState* thread);
 
 	void PostThreadBuffer() { _signal.Post(); }
+
+	ysResult Tick();
 };
 
 GlobalState& GlobalState::instance()

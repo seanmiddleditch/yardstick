@@ -205,12 +205,15 @@ ysResult WebsocketSink::WriteSessionEvent(Session* session, EventData const& ev)
 		YS_TRY(WriteSessionString(session, ev.region.name));
 		YS_TRY(WriteSessionString(session, ev.region.file));
 		break;
-	case EventType::Counter:
-		YS_TRY(WriteSessionString(session, ev.counter.name));
-		YS_TRY(WriteSessionString(session, ev.counter.file));
+	case EventType::Record:
+		YS_TRY(WriteSessionString(session, ev.record.name));
+		YS_TRY(WriteSessionString(session, ev.record.file));
 		break;
 	case EventType::String:
 		// #FIXME - what do we even do here?
+		break;
+	case EventType::Count:
+		YS_TRY(WriteSessionString(session, ev.count.name));
 		break;
 	default: break;
 	}
@@ -303,7 +306,6 @@ ysResult WebsocketSink::Update()
 	if (_server != nullptr)
 	{
 		WebbyServerUpdate(_server);
-		Flush();
 		return ysResult::Success;
 	}
 	else

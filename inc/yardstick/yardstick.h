@@ -86,8 +86,11 @@ enum class ysResult : std::uint8_t
 #	define ysProfile(name) \
 		::_ys_::ScopedRegion YS_CAT(_ys_region, __LINE__)(("" name), __FILE__, __LINE__)
 
-#	define ysCounter(name, value) \
-		(::_ys_::emit_counter(::_ys_::read_clock(), (value), ("" name), __FILE__, __LINE__))
+#	define ysRecord(name, value) \
+		(::_ys_::emit_record(::_ys_::read_clock(), (value), ("" name), __FILE__, __LINE__))
+
+#	define ysCount(name, amount) \
+		(::_ys_::emit_count((amount), ("" name)))
 
 #else // !defined(NO_YS)
 
@@ -96,7 +99,8 @@ enum class ysResult : std::uint8_t
 #	define ysShutdown() (::ysResult::Disabled)
 #	define ysTick() (::ysResult::Disabled)
 #	define ysProfile(name) do{YS_IGNORE((name));}while(false)
-#	define ysCounter(name, value) (YS_IGNORE((name)),YS_IGNORE((value)),::ysResult::Disabled)
+#	define ysRecord(name, value) (YS_IGNORE((name)),YS_IGNORE((value)),::ysResult::Disabled)
+#	define ysCount(name, amount) (YS_IGNORE((name)),YS_IGNORE((amount)),::ysResult::Disabled)
 #	define ysListenWeb(port) (YS_IGNORE((port)),::ysResult::Disabled)
 
 #endif // !defined(NO_YS)
@@ -125,9 +129,13 @@ namespace _ys_
 	/// <returns> Success or error code. </returns>
 	YS_API ysResult YS_CALL listen_web(unsigned short port);
 
+	/// Emit a record.
+	/// @internal
+	YS_API ysResult YS_CALL emit_record(ysTime when, double value, char const* name, char const* file, int line);
+
 	/// Emit a counter.
 	/// @internal
-	YS_API ysResult YS_CALL emit_counter(ysTime when, double value, char const* name, char const* file, int line);
+	YS_API ysResult YS_CALL emit_count(double amount, char const* name);
 
 	/// Emit a region.
 	/// @internal

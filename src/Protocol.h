@@ -4,7 +4,7 @@
 
 namespace _ys_ {
 
-enum class EventType : std::uint8_t { None = 0, Header = 1, Tick = 2, Region = 3, Counter = 4, String = 5 };
+enum class EventType : std::uint8_t { None = 0, Header = 1, Tick = 2, Region = 3, Record = 4, String = 5, Count = 6 };
 
 struct EventData
 {
@@ -35,13 +35,18 @@ struct EventData
 			char const* file;
 			ysTime when;
 			double value;
-		} counter;
+		} record;
 		struct
 		{
 			ysStringHandle id;
 			std::uint16_t size;
 			char const* str;
 		} string;
+		struct
+		{
+			char const* name;
+			double amount;
+		} count;
 	};
 };
 

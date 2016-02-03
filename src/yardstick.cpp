@@ -26,15 +26,24 @@ ysResult YS_API _ys_::shutdown()
 	return GlobalState::instance().Shutdown();
 }
 
-YS_API ysResult YS_CALL _ys_::emit_counter(ysTime when, double value, char const* name, char const* file, int line)
+YS_API ysResult YS_CALL _ys_::emit_record(ysTime when, double value, char const* name, char const* file, int line)
 {
 	EventData ev;
-	ev.type = EventType::Counter;
-	ev.counter.line = line;
-	ev.counter.name = name;
-	ev.counter.file = file;
-	ev.counter.when = when;
-	ev.counter.value = value;
+	ev.type = EventType::Record;
+	ev.record.line = line;
+	ev.record.name = name;
+	ev.record.file = file;
+	ev.record.when = when;
+	ev.record.value = value;
+	return EmitEvent(ev);
+}
+
+YS_API ysResult YS_CALL _ys_::emit_count(double amount, char const* name)
+{
+	EventData ev;
+	ev.type = EventType::Count;
+	ev.count.name = name;
+	ev.count.amount = amount;
 	return EmitEvent(ev);
 }
 
@@ -57,10 +66,7 @@ YS_API ysTime YS_CALL _ys_::read_clock()
 
 YS_API ysResult YS_CALL _ys_::tick()
 {
-	EventData ev;
-	ev.type = EventType::Tick;
-	ev.tick.when = ReadClock();
-	return EmitEvent(ev);
+	return GlobalState::instance().Tick();
 }
 
 YS_API ysResult YS_CALL _ys_::listen_web(unsigned short port)

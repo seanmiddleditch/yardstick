@@ -29,20 +29,25 @@
 				var disconnectBtn = document.getElementById('disconnect');
 				connectBtn.onclick = function(ev){
 					connectBtn.disabled = 'disabled';
-					disconnectBtn.disabled = '';
 					hostVal.disabled = 'disabled';
 					ysProtocol.connect(hostVal.value);
 				};
 				disconnectBtn.onclick = function(ev){
+					disconnectBtn.disabled = 'disabled';
 					ysProtocol.disconnect();
 				};
+				ysProtocol.on('connected', function(){
+					connectBtn.disabled = 'disabled';
+					hostVal.disabled = 'disabled';
+					disconnectBtn.disabled = '';
+				});
 				ysProtocol.on('disconnected', function(){
 					stats.events.innerHTML = 0;
 					stats.frames.innerHTML = 0;
 					stats.bytes.innerHTML = 0;
 					connectBtn.disabled = '';
-					disconnectBtn.disabled = 'disabled';
 					hostVal.disabled = '';
+					disconnectBtn.disabled = 'disabled';
 				});
 			}
 		</script>

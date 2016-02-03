@@ -78,7 +78,7 @@
 					};
 					this.emit('region', ev);
 					return 29;
-				case 4 /*COUNTER*/:
+				case 4 /*RECORD*/:
 					var ev = {
 						line: data.getUint32(pos + 1, true),
 						name: data.getUint32(pos + 5, true),
@@ -86,7 +86,7 @@
 						when: data.getUint64(pos + 13, true),
 						value: data.getFloat64(pos + 21, true)
 					};
-					this.emit('counter', ev);
+					this.emit('record', ev);
 					return 29;
 				case 5 /*STRING*/:
 					var id = data.getUint32(pos + 1, true);
@@ -97,6 +97,13 @@
 						str += String.fromCharCode(data.getUint8(pos + 7 + i));
 					strings[id] = str;
 					return 7 + len;
+				case 6 /*COUNT*/:
+					var ev = {
+						name: data.getUint32(pos + 1, true),
+						amount: data.getFloat64(pos + 5, true)
+					};
+					this.emit('count', ev);
+					return 13;
 				default /*NONE or Unknown*/:
 					console.log('UNKNOWN(pos=', pos, ' type=', type, ')');
 					return data.byteLength;
