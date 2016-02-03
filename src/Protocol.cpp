@@ -63,6 +63,7 @@ ysResult _ys_::EncodeEvent(void* out_buffer, std::size_t available, EventData co
 		break;
 	case EventType::Header:
 		TRY_WRITE(ev.header.frequency);
+		TRY_WRITE(ev.header.start);
 		break;
 	case EventType::Tick:
 		TRY_WRITE(ev.tick.when);
@@ -99,7 +100,7 @@ std::size_t _ys_::EncodeSize(EventData const& ev)
 	case EventType::None:
 		return 1/*type*/;
 	case EventType::Header:
-		return 1/*type*/ + 8/*frequency*/;
+		return 1/*type*/ + 8/*frequency*/ + 8/*start*/;
 	case EventType::Tick:
 		return 1/*type*/ + 8/*time*/;
 	case EventType::Region:

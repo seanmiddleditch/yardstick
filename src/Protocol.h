@@ -14,6 +14,7 @@ struct EventData
 		struct
 		{
 			ysTime frequency;
+			ysTime start;
 		} header;
 		struct
 		{

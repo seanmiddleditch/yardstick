@@ -4,21 +4,56 @@
 		<title>Yardstick</title>
 		<link rel="stylesheet" type="text/css" href="css/ysView.css"/>
 		<script src="https://cdnjs.cloudflare.com/ajax/libs/canvasjs/1.7.0/canvasjs.min.js" type="text/javascript"></script>
-		<script src="js/ys.js" type="text/javascript"></script>
+		<script src="js/ysProtocol.js" type="text/javascript"></script>
 		<script src="js/ysView.js" type="text/javascript"></script>
 		<script type="text/javascript">
 			window.onload = function(){
-				var ys = new Ys(); ys.connect(5760);
-				var ysView = new YsView(ys, {
+				var ysProtocol = new YsProtocol();
+				var ysView = new YsView(ysProtocol, {
 					stats: document.getElementById('stats'),
 					graph: document.getElementById('chart'),
 					legend: document.getElementById('legend'),
+				});
+				var stats = {
+					events: document.getElementById('stats-events'),
+					frames: document.getElementById('stats-frames'),
+					bytes: document.getElementById('stats-bytes')
+				};
+				ysProtocol.on('tick', function(ev){
+					stats.events.innerHTML = ysProtocol.stats.events;
+					stats.frames.innerHTML = ysProtocol.stats.frames;
+					stats.bytes.innerHTML = ysProtocol.stats.bytes;
+				});
+				var hostVal = document.getElementById('host');
+				var connectBtn = document.getElementById('connect');
+				var disconnectBtn = document.getElementById('disconnect');
+				connectBtn.onclick = function(ev){
+					connectBtn.disabled = 'disabled';
+					disconnectBtn.disabled = '';
+					hostVal.disabled = 'disabled';
+					ysProtocol.connect(hostVal.value);
+				};
+				disconnectBtn.onclick = function(ev){
+					ysProtocol.disconnect();
+				};
+				ysProtocol.on('disconnected', function(){
+					stats.events.innerHTML = 0;
+					stats.frames.innerHTML = 0;
+					stats.bytes.innerHTML = 0;
+					connectBtn.disabled = '';
+					disconnectBtn.disabled = 'disabled';
+					hostVal.disabled = '';
 				});
 			}
 		</script>
 	</head>
 	<body>
+		<input id="host" value="localhost:5760" /> <button id="connect">Connect</button> <button id="disconnect" disabled="disabled">Disconnect</button>
 		<div id="chart"></div>
-		<div id="stats" class="grid"></div>
+		<div id="stats" class="grid">
+			<div><span>Events</span><span id="stats-events">0</span></div>
+			<div><span>Frames</span><span id="stats-frames">0</span></div>
+			<div><span>Bytes</span><span id="stats-bytes">0</span></div>
+		</div>
 	</body>
 </html>

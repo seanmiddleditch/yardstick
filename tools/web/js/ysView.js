@@ -1,4 +1,4 @@
-window.YsView = function(ys, options){
+window.YsView = function(ysProtocol, options){
 	var lastTick = 0;
 	var frequency = 0;
 	var width = 0;
@@ -15,6 +15,7 @@ window.YsView = function(ys, options){
 	}];
 	var chart = new CanvasJS.Chart(options.graph, {
 		zoomEnabled: true,
+		animationEnabled: false,
 		legend: {
 			verticalAlign: 'top',
 			horizontalAlign: 'right',
@@ -39,23 +40,21 @@ window.YsView = function(ys, options){
 		arr.push(val);
 	}
 	
-	ys.on('header', function(ev){
+	ysProtocol.on('header', function(ev){
 		frequency = 1 / ev.frequency;
 		width = 10 * ev.frequency;
+		start = lastTick = ev.start;
 	});
 
-	ys.on('tick', function(ev){
-		if (start == 0)
-			start = lastTick = ev.when;
-		
+	ysProtocol.on('tick', function(ev){
 		var dt = ev.when - lastTick;
 		lastTick = ev.when;
 		
-		add(frametimes, {x: ev.when, y: 16 - dt * frequency * 1000});
+		add(frametimes, {x: ev.when, y: dt * frequency * 1000});
 		chart.render();
 	});
 	
-	ys.on('counter', function(ev){
+	ysProtocol.on('counter', function(ev){
 		if (ev.name in counters) {
 			add(counters[ev.name], {x: ev.when, y: ev.value});
 		} else {
@@ -64,9 +63,15 @@ window.YsView = function(ys, options){
 			series.push({
 				type: 'line',
 				dataPoints: values,
-				name: ys.tostr(ev.name),
+				name: ysProtocol.tostr(ev.name),
 				showInLegend: true
 			});
 		}
+	});
+	
+	ysProtocol.on('disconnected', function(ev){
+		add(frametimes, {x: lastTick, y: null});
+		for (var name in counters)
+			add(counters[name], {x: lastTick, y: null});
 	});
 };

@@ -75,10 +75,7 @@ void WebsocketSink::webby_connected(struct WebbyConnection* connection)
 	EventData ev;
 	ev.type = EventType::Header;
 	ev.header.frequency = GetClockFrequency();
-	sink.WriteSessionEvent(session, ev);
-
-	ev.type = EventType::Tick;
-	ev.tick.when = ReadClock();
+	ev.header.start = ReadClock();
 	sink.WriteSessionEvent(session, ev);
 }
 

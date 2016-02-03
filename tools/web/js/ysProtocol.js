@@ -15,7 +15,7 @@
 		}
 	}
 
-	window.Ys = function(){
+	window.YsProtocol = function(){
 		this.stats = {
 			events: 0,
 			frames: 0,
@@ -24,10 +24,12 @@
 		
 		var events = {};
 		var strings = {};
+		
+		var ws = null;
 			
 		this.on = function(ev, cb){
 			if (ev in events)
-				events[ev].append(cb);
+				events[ev].push(cb);
 			else
 				events[ev] = [cb];
 		};
@@ -55,10 +57,11 @@
 			switch (type) {
 				case 1 /*HEADER*/:
 					var ev = {
-						frequency: data.getUint64(pos + 1, true)
+						frequency: data.getUint64(pos + 1, true),
+						start: data.getUint64(pos + 9, true)
 					};
 					this.emit('header', ev);
-					return 9;
+					return 17;
 				case 2 /*TICK*/:
 					var ev = {
 						when: data.getUint64(pos + 1, true)
@@ -110,16 +113,24 @@
 				pos += parseEvent.call(this, data, pos);
 		}
 		
-		this.connect = function(port){
+		this.connect = function(host){
 			var self = this;
 			
-			var ws = new WebSocket('ws://localhost:' + port);
+			ws = new WebSocket('ws://' + host);
 			ws.binaryType = 'arraybuffer';
 
-			ws.onopen = function(){ console.log('opened'); };
-			ws.onerror = function(error){ console.log('error:', error); };
-			ws.onclosed = function(){ console.log('closed'); };
+			ws.onopen = function(){ self.emit('connected'); };
+			ws.onerror = function(error){ self.emit('disconnected', error); };
+			ws.onclosed = function(){ self.emit('disconnected', 'connection closed'); };
 			ws.onmessage = function(ev){ onMessage.call(self, ev.data); };
+		};
+		
+		this.disconnect = function(){
+			if (ws) {
+				ws.close();
+				ws = null;
+				this.emit('disconnected');
+			}
 		};
 	};
 })();
