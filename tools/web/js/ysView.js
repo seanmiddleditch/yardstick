@@ -1,13 +1,13 @@
 /* Copyright (C) 2016 Sean Middleditch, all rights reserverd. */
+'use strict';
 
 window.YsView = function(ysState, options){
-	var lastTick = 0;
-	var frequency = 0;
-	var width = 0;
+	var timeSpan = 4;
 		
 	var frametimes = [];
 	var counters = {};
 	var start = 0;
+	var period = 0;
 	
 	var series = [{
 		type: 'stepArea',
@@ -15,10 +15,16 @@ window.YsView = function(ysState, options){
 		name: 'Frametime',
 		showInLegend: true
 	}];
+	var axis = {
+		interlacedColor: '#EFEFEF',
+		valueFormatString: 'O',
+		labelFormatter: (e)=>((e.value - start) * period).toFixed(2) + 's'
+	};
 	var chart = new CanvasJS.Chart(options.graph, {
 		theme: 'theme2',
 		zoomEnabled: false,
 		animationEnabled: false,
+		axisX: axis,
 		legend: {
 			verticalAlign: 'top',
 			horizontalAlign: 'right',
@@ -29,86 +35,53 @@ window.YsView = function(ysState, options){
 					e.dataSeries.visible = false;
 				else
                     e.dataSeries.visible = true;
+				chart.render();
             }
 		},
 		toolTip: {
-			content: '{name}: {y}'
+			content: (e)=>'['+((e.entries[0].dataPoint.x-start)*period).toFixed(2)+'s] '+e.entries[0].dataSeries.name+': '+e.entries[0].dataPoint.y
 		},
 		data: series
 	});
-
-	function add(arr, val){
-		while (arr.length != 0 && arr[0].x < lastTick - width)
-			arr.shift();
-		arr.push(val);
-	}
-	
-	function add_counter(ysState, ev){
-		var data = [];
-		var counter = counters[ev.name] = {
-			last: ev.when,
-			accum: 0,
-			data: data
-		};
-		series.push({
-			visible: false,
-			type: 'line',
-			dataPoints: data,
-			name: ysState.tostr(ev.name),
-			showInLegend: true
-		});
-		return counter;
-	}
 	
 	ysState.on('header', function(ev){
-		frequency = 1 / ev.frequency;
-		width = 4 * ev.frequency;
-		start = lastTick = ev.start;
+		axis.interval = ev.frequency;
+		period = 1 / ev.frequency;
+		start = ev.start;
 	});
 
 	ysState.on('tick', function(ev){
-		var dt = ev.when - lastTick;
-		lastTick = ev.when;
+		var startTime = ysState.now - ysState.frequency * timeSpan;
 		
-		add(frametimes, {x: ev.when, y: dt * frequency * 1000});
+		frametimes.length = 0;
+		var startIndex = ysState.frames.findIndexByTime(startTime);
+		for (var i = startIndex; i != ysState.frames.length; ++i) {
+			var frame = ysState.frames.frame(i);
+			frametimes.push({x: frame.start, y: frame.length * ysState.period * 1000});
+		}
 		
-		for (var name in counters) {
-			var counter = counters[name];
-			if (counter.accum != 0) {
-				add(counter.data, {x: ev.when, y: counter.accum});
-				counter.accum = 0;
+		for (var counter of ysState.counters) {
+			var data;
+			if (counter.id in counters) {
+				data = counters[counter.id];
+			} else {
+				data = [];
+				counters[counter.id] = data;
+				series.push({
+					visible: false,
+					type: 'line',
+					dataPoints: data,
+					name: ysState.tostr(counter.id),
+					showInLegend: true
+				});
 			}
+			
+			data.length = 0;
+			var startIndex = counter.findIndexByTime(startTime);
+			for (var i = startIndex; i != counter.data.length; ++i)
+				data.push({x: counter.data[i][0], y: counter.data[i][1]});
 		}
 		
 		chart.render();
-	});
-
-	ysState.on('counter_set', function(ev){
-		if (ev.name in counters) {
-			add(counters[ev.name], {x: ev.when, y: ev.value});
-		} else {
-			var counter = add_counter(ysState, ev);
-			if (counter.accum != 0) {
-				add(counter.data, {x: ev.when, y: counter.accum});
-				counter.accum = 0;
-			}
-			add(counter.data, {x: ev.when, y: ev.value});
-		}
-	});
-	
-	ysState.on('counter_add', function(ev){
-		if (ev.name in counters) {
-			counters[ev.name].accum += ev.amount;
-		} else {
-			var counter = add_counter(ysState, ev);
-			ev.accum += ev.amount;
-		}
-	});
-	
-	ysState.on('disconnected', function(ev){
-		add(frametimes, {x: lastTick, y: null});
-		for (var name in counters)
-			add(counters[name].data, {x: lastTick, y: null});
-			add(counters[name].data, {x: lastTick, y: null});
 	});
 };

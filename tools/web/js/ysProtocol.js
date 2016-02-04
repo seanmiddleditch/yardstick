@@ -1,123 +1,169 @@
 /* Copyright (C) 2016 Sean Middleditch, all rights reserverd. */
+'use strict';
 
-(function(){
-	// extend DataView to support reading 64-bit unsigned ints,
-	// cast into native JS numbers (doubles). This isn't going to
-	// work for every U64 one might need, but it works for our
-	// current needs.
-	DataView.prototype.getUint64 = function(pos, endian){
-		if (endian) {
-			var lo = this.getUint32(pos, endian);
-			var hi = this.getUint32(pos + 4, endian);
-			return hi * Math.pow(2, 32) + lo;
-		} else {
-			var hi = this.getUint32(pos, endian);
-			var lo = this.getUint32(pos + 4, endian);
-			return hi * Math.pow(2, 32) + lo;
+// extend DataView to support reading 64-bit unsigned ints,
+// cast into native JS numbers (doubles). This isn't going to
+// work for every U64 one might need, but it works for our
+// current needs.
+DataView.prototype.getUint64 = function(pos, endian){
+	if (endian) {
+		var lo = this.getUint32(pos, endian);
+		var hi = this.getUint32(pos + 4, endian);
+		return hi * Math.pow(2, 32) + lo;
+	} else {
+		var hi = this.getUint32(pos, endian);
+		var lo = this.getUint32(pos + 4, endian);
+		return hi * Math.pow(2, 32) + lo;
+	}
+}
+
+class YsEventReader {
+	constructor(data, pos) {
+		this._data = data;
+		this._pos = pos;
+		this._error = null;
+	}
+	
+	[Symbol.iterator]() { return this; }
+	
+	next() {
+		var ev = this.read();
+		return ev ? { done: false, value: ev } : { done: true };
+	}
+	
+	read() {
+		var pos = this._pos;
+		var data = this._data;
+		
+		if (pos >= data.byteLength)
+			return null;
+		
+		var type = data.getUint8(pos);
+		switch (type) {
+		case 1 /*HEADER*/:
+			this._pos += 17;
+			return {
+				type: 'header',
+				frequency: data.getUint64(pos + 1, true),
+				start: data.getUint64(pos + 9, true)
+			};
+		case 2 /*TICK*/:
+			this._pos += 9;
+			return {
+				type: 'tick',
+				when: data.getUint64(pos + 1, true)
+			};
+		case 3 /*REGION*/:
+			this._pos += 29;
+			return {
+				type: 'region',
+				line: data.getUint32(pos + 1, true),
+				name: data.getUint32(pos + 5, true),
+				file: data.getUint32(pos + 9, true),
+				start: data.getUint64(pos + 13, true),
+				end: data.getUint64(pos + 21, true)
+			};
+		case 4 /*COUNTER_SET*/:
+			this._pos += 29;
+			return {
+				type: 'counter_set',
+				line: data.getUint32(pos + 1, true),
+				name: data.getUint32(pos + 5, true),
+				file: data.getUint32(pos + 9, true),
+				when: data.getUint64(pos + 13, true),
+				value: data.getFloat64(pos + 21, true)
+			};
+		case 5 /*STRING*/:
+			var id = data.getUint32(pos + 1, true);
+			var len = data.getUint16(pos + 5, true);
+			// yup, pretty terrible
+			var str = '';
+			for (var i = 0; i != len; ++i)
+				str += String.fromCharCode(data.getUint8(pos + 7 + i));
+			
+			this._pos += 7 + len;
+			return {
+				type: 'string',
+				id: id,
+				size: len,
+				string: str
+			};
+		case 6 /*COUNTER_ADD*/:
+			this._pos += 13;
+			return {
+				type: 'counter_add',
+				name: data.getUint32(pos + 1, true),
+				amount: data.getFloat64(pos + 5, true)
+			};
+		default /*NONE or Unknown*/:
+			this._error = 'protocol parse error: pos '+pos+' byte='+type;
+			this._pos += data.byteLength;
+			return null;
 		}
 	}
+}
 
-	window.YsProtocol = function(){
-		this.stats = {
+class YsProtocol {
+	constructor() {
+		this._stats = {
 			events: 0,
 			frames: 0,
 			bytes: 0
 		};
 		
-		var ws = null;
+		this._ws = null;
 		
+		this._callbacks = new Map();
+	
+		// public events
 		this.onconnect = function(){};
 		this.ondisconnect = function(){};
 		this.onerror = function(error){};
-		this.onevent = function(type, ev){};
+		this.onevent = function(ev){};
+	}
+	
+	get stats() { return this._stats; }
 		
-		function parseEvent(data, pos){
-			++this.stats.events;
-			
-			var type = data.getUint8(pos);
-			switch (type) {
-				case 1 /*HEADER*/:
-					this.onevent('header', {
-						frequency: data.getUint64(pos + 1, true),
-						start: data.getUint64(pos + 9, true)
-					});
-					return 17;
-				case 2 /*TICK*/:
-					this.onevent('tick', {
-						when: data.getUint64(pos + 1, true)
-					});
-					return 9;
-				case 3 /*REGION*/:
-					this.onevent('region', {
-						line: data.getUint32(pos + 1, true),
-						name: data.getUint32(pos + 5, true),
-						file: data.getUint32(pos + 9, true),
-						start: data.getUint64(pos + 13, true),
-						end: data.getUint64(pos + 21, true)
-					});
-					return 29;
-				case 4 /*COUNTER_SET*/:
-					this.onevent('counter_set', {
-						line: data.getUint32(pos + 1, true),
-						name: data.getUint32(pos + 5, true),
-						file: data.getUint32(pos + 9, true),
-						when: data.getUint64(pos + 13, true),
-						value: data.getFloat64(pos + 21, true)
-					});
-					return 29;
-				case 5 /*STRING*/:
-					var id = data.getUint32(pos + 1, true);
-					var len = data.getUint16(pos + 5, true);
-					// yup, pretty terrible
-					var str = '';
-					for (var i = 0; i != len; ++i)
-						str += String.fromCharCode(data.getUint8(pos + 7 + i));
-					this.onevent('string', {
-						id: id,
-						size: len,
-						string: str
-					});
-					return 7 + len;
-				case 6 /*COUNTER_ADD*/:
-					this.onevent('counter_add', {
-						name: data.getUint32(pos + 1, true),
-						amount: data.getFloat64(pos + 5, true)
-					});
-					return 13;
-				default /*NONE or Unknown*/:
-					this.error('protocol parse error: pos '+pos+' byte='+type);
-					return data.byteLength;
-			}
-		}
+	on(ev, cb) {
+		var cbs = this._callbacks.get(ev);
+		if (cbs === undefined)
+			this._callbacks.set(ev, [cb]);
+		else
+			cbs.push(cb);
+	}
 
-		function onMessage(data){
-			++this.stats.frames;
-			this.stats.bytes += data.byteLength;
-			
-			var data = new DataView(data);
-			var pos = 0;
-			while (pos < data.byteLength)
-				pos += parseEvent.call(this, data, pos);
-		}
-		
-		this.connect = function(host){
-			var self = this;
-			
-			ws = new WebSocket('ws://' + host);
-			ws.binaryType = 'arraybuffer';
+	emit(ev, data) {
+		var cbs = this._callbacks.get(ev);
+		if (cbs !== undefined)
+			for (var cb of cbs)
+				cb(data);
+	}
 
-			ws.onopen = function(){ self.onconnect(); };
-			ws.onerror = function(err){ self.onerror(err); };
-			ws.onclosed = function(){ self.ondisconnect(); };
-			ws.onmessage = function(ev){ onMessage.call(self, ev.data); };
-		};
+	connect(host) {
+		var ws = this._ws = new WebSocket('ws://' + host);
+		ws.binaryType = 'arraybuffer';
 		
-		this.disconnect = function(){
-			if (ws) {
-				ws.close();
-				ws = null;
-				this.ondisconnect();
+		ws.onopen = () => this.emit('connect');
+		ws.onerror = (err) => { this.emit('error', err); this._ws = null; };
+		ws.onclosed = () => { this.emit('disconnect'); this._ws = null; };
+		ws.onmessage = (msg) => {
+			++this._stats.frames;
+			this._stats.bytes += msg.data.byteLength;
+			var reader = new YsEventReader(new DataView(msg.data), 0)
+			for (var ev of reader) {
+				++this._stats.events;
+				this.emit('event', ev);
 			}
+			if (reader._error)
+				this.emit('error', reader._error);
 		};
-	};
-})();
+	}
+	
+	disconnect() {
+		if (this._ws) {
+			this._ws.close();
+			this._ws = null;
+			this.emit('disconnect');
+		}
+	}
+}
