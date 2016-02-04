@@ -86,10 +86,10 @@ enum class ysResult : std::uint8_t
 #	define ysProfile(name) \
 		::_ys_::ScopedRegion YS_CAT(_ys_region, __LINE__)(("" name), __FILE__, __LINE__)
 
-#	define ysRecord(name, value) \
+#	define ysCounterSet(name, value) \
 		(::_ys_::emit_record(::_ys_::read_clock(), (value), ("" name), __FILE__, __LINE__))
 
-#	define ysCount(name, amount) \
+#	define ysCounterAdd(name, amount) \
 		(::_ys_::emit_count((amount), ("" name)))
 
 #else // !defined(NO_YS)
@@ -99,8 +99,8 @@ enum class ysResult : std::uint8_t
 #	define ysShutdown() (::ysResult::Disabled)
 #	define ysTick() (::ysResult::Disabled)
 #	define ysProfile(name) do{YS_IGNORE((name));}while(false)
-#	define ysRecord(name, value) (YS_IGNORE((name)),YS_IGNORE((value)),::ysResult::Disabled)
-#	define ysCount(name, amount) (YS_IGNORE((name)),YS_IGNORE((amount)),::ysResult::Disabled)
+#	define ysCounterSet(name, value) (YS_IGNORE((name)),YS_IGNORE((value)),::ysResult::Disabled)
+#	define ysCounterAdd(name, amount) (YS_IGNORE((name)),YS_IGNORE((amount)),::ysResult::Disabled)
 #	define ysListenWeb(port) (YS_IGNORE((port)),::ysResult::Disabled)
 
 #endif // !defined(NO_YS)

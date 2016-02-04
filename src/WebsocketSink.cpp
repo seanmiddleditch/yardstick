@@ -202,18 +202,18 @@ ysResult WebsocketSink::WriteSessionEvent(Session* session, EventData const& ev)
 	switch (ev.type)
 	{
 	case EventType::Region:
-		YS_TRY(WriteSessionString(session, ev.region.name));
-		YS_TRY(WriteSessionString(session, ev.region.file));
+		YS_TRY(WriteSessionString(session, ev.counter_set.name));
+		YS_TRY(WriteSessionString(session, ev.counter_set.file));
 		break;
-	case EventType::Record:
+	case EventType::CounterSet:
 		YS_TRY(WriteSessionString(session, ev.record.name));
 		YS_TRY(WriteSessionString(session, ev.record.file));
 		break;
 	case EventType::String:
 		// #FIXME - what do we even do here?
 		break;
-	case EventType::Count:
-		YS_TRY(WriteSessionString(session, ev.count.name));
+	case EventType::CounterAdd:
+		YS_TRY(WriteSessionString(session, ev.counter_add.name));
 		break;
 	default: break;
 	}

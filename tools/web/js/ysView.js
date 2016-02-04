@@ -1,4 +1,6 @@
-window.YsView = function(ysProtocol, options){
+/* Copyright (C) 2016 Sean Middleditch, all rights reserverd. */
+
+window.YsView = function(ysState, options){
 	var lastTick = 0;
 	var frequency = 0;
 	var width = 0;
@@ -15,7 +17,7 @@ window.YsView = function(ysProtocol, options){
 	}];
 	var chart = new CanvasJS.Chart(options.graph, {
 		theme: 'theme2',
-		zoomEnabled: true,
+		zoomEnabled: false,
 		animationEnabled: false,
 		legend: {
 			verticalAlign: 'top',
@@ -41,7 +43,7 @@ window.YsView = function(ysProtocol, options){
 		arr.push(val);
 	}
 	
-	function add_counter(ysProtocol, ev){
+	function add_counter(ysState, ev){
 		var data = [];
 		var counter = counters[ev.name] = {
 			last: ev.when,
@@ -52,19 +54,19 @@ window.YsView = function(ysProtocol, options){
 			visible: false,
 			type: 'line',
 			dataPoints: data,
-			name: ysProtocol.tostr(ev.name),
+			name: ysState.tostr(ev.name),
 			showInLegend: true
 		});
 		return counter;
 	}
 	
-	ysProtocol.on('header', function(ev){
+	ysState.on('header', function(ev){
 		frequency = 1 / ev.frequency;
 		width = 4 * ev.frequency;
 		start = lastTick = ev.start;
 	});
 
-	ysProtocol.on('tick', function(ev){
+	ysState.on('tick', function(ev){
 		var dt = ev.when - lastTick;
 		lastTick = ev.when;
 		
@@ -81,11 +83,11 @@ window.YsView = function(ysProtocol, options){
 		chart.render();
 	});
 
-	ysProtocol.on('record', function(ev){
+	ysState.on('counter_set', function(ev){
 		if (ev.name in counters) {
 			add(counters[ev.name], {x: ev.when, y: ev.value});
 		} else {
-			var counter = add_counter(ysProtocol, ev);
+			var counter = add_counter(ysState, ev);
 			if (counter.accum != 0) {
 				add(counter.data, {x: ev.when, y: counter.accum});
 				counter.accum = 0;
@@ -94,16 +96,16 @@ window.YsView = function(ysProtocol, options){
 		}
 	});
 	
-	ysProtocol.on('count', function(ev){
+	ysState.on('counter_add', function(ev){
 		if (ev.name in counters) {
 			counters[ev.name].accum += ev.amount;
 		} else {
-			var counter = add_counter(ysProtocol, ev);
+			var counter = add_counter(ysState, ev);
 			ev.accum += ev.amount;
 		}
 	});
 	
-	ysProtocol.on('disconnected', function(ev){
+	ysState.on('disconnected', function(ev){
 		add(frametimes, {x: lastTick, y: null});
 		for (var name in counters)
 			add(counters[name].data, {x: lastTick, y: null});

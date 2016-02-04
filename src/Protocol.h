@@ -4,7 +4,7 @@
 
 namespace _ys_ {
 
-enum class EventType : std::uint8_t { None = 0, Header = 1, Tick = 2, Region = 3, Record = 4, String = 5, Count = 6 };
+enum class EventType : std::uint8_t { None = 0, Header = 1, Tick = 2, Region = 3, CounterSet = 4, String = 5, CounterAdd = 6 };
 
 struct EventData
 {
@@ -27,7 +27,7 @@ struct EventData
 			char const* file;
 			ysTime begin;
 			ysTime end;
-		} region;
+		} counter_set;
 		struct
 		{
 			std::uint32_t line;
@@ -46,7 +46,7 @@ struct EventData
 		{
 			char const* name;
 			double amount;
-		} count;
+		} counter_add;
 	};
 };
 
