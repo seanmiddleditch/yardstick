@@ -21,7 +21,7 @@ void ThreadState::Enque(EventData const& ev)
 	
 	if (gs.IsActive() && !_queue.TryEnque(ev))
 	{
-		gs.PostThreadBuffer();
+		gs.SignalPost();
 		while (gs.IsActive() && !_queue.TryEnque(ev))
 			; // keep trying to submit until we succeed or we detect that Yardstick has shutdown
 	}

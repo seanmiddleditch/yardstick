@@ -66,7 +66,10 @@ YS_API ysTime YS_CALL _ys_::read_clock()
 
 YS_API ysResult YS_CALL _ys_::tick()
 {
-	return GlobalState::instance().Tick();
+	EventData ev;
+	ev.type = EventType::Tick;
+	ev.tick.when = ReadClock();
+	return EmitEvent(ev);
 }
 
 YS_API ysResult YS_CALL _ys_::listen_web(unsigned short port)

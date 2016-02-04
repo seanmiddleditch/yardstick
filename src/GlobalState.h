@@ -32,7 +32,8 @@ class GlobalState
 
 	void ThreadMain();
 	ysResult ProcessThread(ThreadState* thread);
-	ysResult Flush();
+	ysResult FlushThreads();
+	ysResult WriteEvent(EventData const& ev);
 
 public:
 	GlobalState() : _active(false) {}
@@ -50,9 +51,7 @@ public:
 	void RegisterThread(ThreadState* thread);
 	void DeregisterThread(ThreadState* thread);
 
-	void PostThreadBuffer() { _signal.Post(); }
-
-	ysResult Tick();
+	void SignalPost() { _signal.Post(); }
 };
 
 GlobalState& GlobalState::instance()

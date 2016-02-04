@@ -66,7 +66,10 @@ void GlobalState::ThreadMain()
 	{
 		_signal.Wait(100);
 
-		Flush();
+		FlushThreads();
+
+		_websocketSink.Flush();
+		_websocketSink.Update();
 	}
 }
 
@@ -75,17 +78,21 @@ ysResult GlobalState::ProcessThread(ThreadState* thread)
 	EventData ev;
 	int count = 512;
 	while (--count && thread->Deque(ev))
-		YS_TRY(_websocketSink.WriteEvent(ev));
+		YS_TRY(WriteEvent(ev));
 	return ysResult::Success;
 }
 
-ysResult GlobalState::Flush()
+ysResult GlobalState::FlushThreads()
 {
 	LockGuard guard(_threadsLock);
 	for (ThreadState* thread = _threads; thread != nullptr; thread = thread->_next)
 		YS_TRY(ProcessThread(thread));
+	return ysResult::Success;
+}
 
-	return _websocketSink.Update();
+ysResult GlobalState::WriteEvent(EventData const& ev)
+{
+	return _websocketSink.WriteEvent(ev);
 }
 
 void GlobalState::RegisterThread(ThreadState* thread)
@@ -108,16 +115,4 @@ void GlobalState::DeregisterThread(ThreadState* thread)
 		thread->_prev->_next = thread->_next;
 	if (_threads == thread)
 		_threads = _threads->_next;
-}
-
-ysResult GlobalState::Tick()
-{
-	Flush();
-
-	EventData ev;
-	ev.type = EventType::Tick;
-	ev.tick.when = ReadClock();
-	YS_TRY(_websocketSink.WriteEvent(ev));
-
-	return _websocketSink.Flush();
 }
