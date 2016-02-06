@@ -17,7 +17,7 @@ class YsCounter {
 		var i = this._data.length - 1;
 		while (i > 0 && this._data[i][0] > time)
 			--i;
-		this._data.splice(i, 0, [time, value]);
+		this._data.splice(i + 1, 0, [time, value]);
 	}
 	
 	addAmount(amount) {
