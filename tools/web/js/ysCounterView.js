@@ -18,7 +18,7 @@
  */
 'use strict';
 
-window.YsView = function(ysState, options){
+window.YsCounterView = function(ysState, options){
 	var timeSpan = 4;
 		
 	var frametimes = [];
