@@ -150,7 +150,7 @@ class YsFrameSet {
 		while (count > 0) {
 			var step = (count / 2)|0;
 			var i = start + step;
-			if (data[i].start < time) {
+			if (data[i].end < time) {
 				start = i + 1;
 				count -= step + 1;
 			} else {

@@ -72,6 +72,7 @@ window.YsView = function(ysState, options){
 		
 		frametimes.length = 0;
 		var startIndex = ysState.frames.findIndexByTime(startTime);
+		frametimes.push({x: startTime});
 		for (var i = startIndex; i != ysState.frames.length; ++i) {
 			var frame = ysState.frames.frame(i);
 			frametimes.push({x: frame.start, y: frame.length * ysState.period * 1000});
@@ -95,6 +96,7 @@ window.YsView = function(ysState, options){
 			
 			data.length = 0;
 			var startIndex = counter.findIndexByTime(startTime);
+			data.push({x: startTime});
 			for (var i = startIndex; i != counter.data.length; ++i)
 				data.push({x: counter.data[i][0], y: counter.data[i][1]});
 		}
