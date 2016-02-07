@@ -3,6 +3,17 @@
 #if !defined(YARDSTICK_H)
 #define YARDSTICK_H
 
+// ---- Version Information ----
+
+#define YS_VERSION_MAJOR "16"
+#define YS_VERSION_MINOR "02"
+#define YS_VERSION_PATCH "a"
+#define YS_VERSION_NUMERIC 0x00160200
+
+#define YS_VERSION YS_VERSION_MAJOR "." YS_VERSION_MINOR YS_VERSION_PATCH
+
+// ---- Public Dependencies ----
+
 #include <cstddef>
 #include <cstdint>
 #include <cassert>

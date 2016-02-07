@@ -1,8 +1,11 @@
 Yardstick
 =========
 
+16.02a - 2016-02-06
+
 Copyright (C) 2014-2016 Sean Middleditch <sean@middleditch.us>
-All rights reserved.
+
+Released under the MIT license. See LICENSE.txt for more details.
 
 Introduction
 ------------
