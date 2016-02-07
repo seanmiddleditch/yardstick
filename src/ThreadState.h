@@ -1,8 +1,28 @@
-/* Copyright (C) 2016 Sean Middleditch, all rights reserverd. */
+/* Yardstick
+ * Copyright (c) 2014-1016 Sean Middleditch
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
+ * associated documentation files (the "Software"), to deal in the Software without restriction,
+ * including without limitation the rights to use, copy, modify, merge, publish, distribute,
+ * sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all copies or
+ * substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT
+ * NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+ * NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+ * DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+ */
 
 #pragma once
 
-#include "ConcurrentCircularBuffer.h"
+#include <yardstick/yardstick.h>
+
+#include "ConcurrentQueue.h"
+#include "Protocol.h"
 
 #include <thread>
 
@@ -10,26 +30,13 @@ namespace _ys_ {
 
 class ThreadState
 {
-	ConcurrentCircularBuffer<> _buffer;
+	ConcurrentQueue<EventData, 512> _queue;
 	std::thread::id _thread;
 
-	template <typename T>
-	static std::uint32_t calculate_size(T const& value) { return sizeof(value); }
-
-	template <typename T, typename... Ts>
-	static std::uint32_t calculate_size(T const& value, Ts const&... ts) { return calculate_size(value) + calculate_size(ts...); }
-
-	template <typename T>
-	static void write_value(void* out, T const& value) { std::memcpy(out, &value, sizeof(value)); }
-
-	template <typename T, typename... Ts>
-	static void write_value(void* out, T const& value, Ts const&... ts)
-	{
-		write_value(out, value);
-		write_value(static_cast<char*>(out) + sizeof(value), ts...);
-	}
-
-	void post_write(void const* buffer, std::uint32_t len);
+	// managed by GlobalState _only_!!!
+	ThreadState* _prev = nullptr;
+	ThreadState* _next = nullptr;
+	friend class GlobalState;
 
 public:
 	ThreadState();
@@ -46,22 +53,9 @@ public:
 
 	std::thread::id const& GetThreadId() const { return _thread; }
 
-	template <typename... Ts>
-	void Write(Ts const&... ts)
-	{
-		char tmp[128];
-		std::uint32_t const size = calculate_size(ts...);
-		if (size <= sizeof(tmp))
-		{
-			write_value(tmp, ts...);
-			post_write(tmp, size);	
-		}
-	}
+	void Enque(EventData const& ev);
 
-	std::uint32_t Read(void* out, std::uint32_t max)
-	{
-		return _buffer.Read(out, max);
-	}
+	bool Deque(EventData& out_ev);
 };
 
 } // namespace _ys_

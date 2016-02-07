@@ -1,7 +1,35 @@
-/* Copyright (C) 2014-2016 Sean Middleditch, all rights reserverd. */
+/* Yardstick
+ * Copyright (c) 2014-1016 Sean Middleditch
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
+ * associated documentation files (the "Software"), to deal in the Software without restriction,
+ * including without limitation the rights to use, copy, modify, merge, publish, distribute,
+ * sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all copies or
+ * substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT
+ * NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+ * NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+ * DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+ */
 
 #if !defined(YARDSTICK_H)
 #define YARDSTICK_H
+
+// ---- Version Information ----
+
+#define YS_VERSION_MAJOR "16"
+#define YS_VERSION_MINOR "02"
+#define YS_VERSION_PATCH "a"
+#define YS_VERSION_NUMERIC 0x00160200
+
+#define YS_VERSION YS_VERSION_MAJOR "." YS_VERSION_MINOR YS_VERSION_PATCH
+
+// ---- Public Dependencies ----
 
 #include <cstddef>
 #include <cstdint>
@@ -39,17 +67,13 @@
 #	define YS_ASSERT(expr, msg) assert((expr) && (msg))
 #endif
 
+#define YS_TRY(expr) for(ysResult YS_CAT(_ys_result,__LINE__)=(expr);YS_CAT(_ys_result,__LINE__)!=ysResult::Success;){return YS_CAT(_ys_result,__LINE__);}
+
 /// Type returned by the high-resolution timer.
 using ysTime = std::uint64_t;
 
-/// Unique handle to a location.
-enum class ysLocationId : std::uint32_t { None = 0 };
-
-/// Unique handle to a region.
-enum class ysRegionId : std::uint16_t { None = 0 };
-
-/// Unique handle to a counter.
-enum class ysCounterId : std::uint16_t { None = 0 };
+/// Type used to represent unique string identifiers.
+using ysStringHandle = std::uint32_t;
 
 /// Memory allocation callback.
 /// Follows the rules of realloc(), except that it will only be used to allocate or free.
@@ -72,73 +96,40 @@ enum class ysResult : std::uint8_t
 	Uninitialized,
 	/// Yardstick support has been disabled.
 	Disabled,
-	/// Yardstick is not currently capturing a profile.
-	NotCapturing,
 	/// Yardstick has already been initialized.
 	AlreadyInitialized,
-	/// Yardstick is already capturing a profile.
-	AlreadyCapturing,
-};
-
-/// Protocol event
-struct ysEvent
-{
-	enum { TypeNone, TypeHeader, TypeTick, TypeRegion, TypeCounter } type;
-	union
-	{
-		struct
-		{
-			ysTime frequency;
-		} header;
-		struct
-		{
-			ysTime when;
-		} tick;
-		struct
-		{
-			ysRegionId id;
-			ysLocationId loc;
-			ysTime begin;
-			ysTime end;
-		} region;
-		struct
-		{
-			ysCounterId id;
-			ysLocationId loc;
-			ysTime when;
-			double amount;
-		} counter;
-	};
 };
 
 // ---- Public Macros ----
 
 #if !defined(NO_YS)
 
+#	define ysEnabled() (::ysResult::Success)
 #	define ysInitialize(config) (::_ys_::initialize((config)))
 #	define ysShutdown() (::_ys_::shutdown())
-#	define ysTick() (::_ys_::emit_tick())
+#	define ysTick() (::_ys_::tick())
+#	define ysListenWeb(port) (::_ys_::listen_web((port)))
 
   /// Marks the current scope as being in a region, and automatically closes the region at the end of the scope.
 #	define ysProfile(name) \
-		static auto const YS_CAT(_ys_region_id, __LINE__) = ::_ys_::add_region(("" name)); \
-		static auto const YS_CAT(_ys_location_id, __LINE__) = ::_ys_::add_location(__FILE__, __LINE__, __FUNCTION__); \
-		::_ys_::ScopedRegion YS_CAT(_ys_region, __LINE__)(YS_CAT(_ys_region_id, __LINE__), YS_CAT(_ys_location_id, __LINE__))
+		::_ys_::ScopedRegion YS_CAT(_ys_region, __LINE__)(("" name), __FILE__, __LINE__)
 
-#	define ysCount(name, amount) \
-		do{ \
-			static auto const YS_CAT(_ys_counter_id, __LINE__) = ::_ys_::add_counter(("" name)); \
-			static auto const YS_CAT(_ys_location_id, __LINE__) = ::_ys_::add_location(__FILE__, __LINE__, __FUNCTION__); \
-			::_ys_::emit_counter_add(YS_CAT(_ys_counter_id, __LINE__), YS_CAT(_ys_location_id, __LINE__), (amount)); \
-		}while(false)
+#	define ysCounterSet(name, value) \
+		(::_ys_::emit_record(::_ys_::read_clock(), (value), ("" name), __FILE__, __LINE__))
+
+#	define ysCounterAdd(name, amount) \
+		(::_ys_::emit_count((amount), ("" name)))
 
 #else // !defined(NO_YS)
 
-#	define ysInitialize(allocator) (YS_IGNORE((allocator)),::ys::ErrorCode::Disabled)
-#	define ysShutdown() (::ys::ErrorCode::Disabled)
-#	define ysTick() (::ys::ErrorCode::Disabled)
+#	define ysEnabled() (::ysResult::Disabled)
+#	define ysInitialize(allocator) (YS_IGNORE((allocator)),::ysResult::Disabled)
+#	define ysShutdown() (::ysResult::Disabled)
+#	define ysTick() (::ysResult::Disabled)
 #	define ysProfile(name) do{YS_IGNORE((name));}while(false)
-#	define ysCount(name, amount) do{YS_IGNORE((name));YS_IGNORE((amount));}while(false)
+#	define ysCounterSet(name, value) (YS_IGNORE((name)),YS_IGNORE((value)),::ysResult::Disabled)
+#	define ysCounterAdd(name, amount) (YS_IGNORE((name)),YS_IGNORE((amount)),::ysResult::Disabled)
+#	define ysListenWeb(port) (YS_IGNORE((port)),::ysResult::Disabled)
 
 #endif // !defined(NO_YS)
 
@@ -148,7 +139,6 @@ struct ysEvent
 
 namespace _ys_
 {
-
 	/// Initializes the Yardstick library.
 	/// Must be called before any other Yardstick function.
 	/// @param allocator Custom allocator to override the default.
@@ -160,33 +150,24 @@ namespace _ys_
 	YS_API ysResult YS_CALL shutdown();
 
 	/// Call once per frame.
-	YS_API ysResult YS_CALL emit_tick();
+	YS_API ysResult YS_CALL tick();
 
-	/// Registers a location to be used for future calls.
-	/// @internal
-	YS_API ysLocationId YS_CALL add_location(char const* fileName, int line, char const* functionName);
+	/// <summary> Listens for incoming Yardstick tool connections on the given port.  </summary>
+	/// <param name="port"> The port to listen on. </param>
+	/// <returns> Success or error code. </returns>
+	YS_API ysResult YS_CALL listen_web(unsigned short port);
 
-	/// Registers a counter to be used for future calls.
+	/// Emit a record.
 	/// @internal
-	YS_API ysCounterId YS_CALL add_counter(const char* counterName);
+	YS_API ysResult YS_CALL emit_record(ysTime when, double value, char const* name, char const* file, int line);
 
-	/// Registers a region to be used for future calls.
+	/// Emit a counter.
 	/// @internal
-	YS_API ysRegionId YS_CALL add_region(const char* regionName);
-
-	/// Adds a value to a counter.
-	/// @internal
-	YS_API void YS_CALL emit_counter_add(ysCounterId counterId, ysLocationId locationId, double amount);
+	YS_API ysResult YS_CALL emit_count(double amount, char const* name);
 
 	/// Emit a region.
 	/// @internal
-	YS_API void YS_CALL emit_region(ysRegionId regionId, ysLocationId locationId, ysTime startTime, ysTime endTime);
-
-	/// Emits an event from the current thread.
-	YS_API ysResult YS_CALL emit_event(ysEvent const& ev);
-
-	/// Parses an event out of a buffer.
-	YS_API ysResult YS_CALL read_event(ysEvent& out_ev, std::size_t& out_len, void const* buffer, std::size_t available);
+	YS_API ysResult YS_CALL emit_region(ysTime startTime, ysTime endTime, char const* name, char const* file, int line);
 
 	/// Read the current clock value.
 	/// @internal
@@ -196,15 +177,16 @@ namespace _ys_
 	/// @internal
 	struct ScopedRegion final
 	{
-		YS_INLINE ScopedRegion(ysRegionId regionId, ysLocationId locationId) : _regionId(regionId), _locationId(locationId), _startTime(read_clock()) {}
-		YS_INLINE ~ScopedRegion() { emit_region(_regionId, _locationId, _startTime, read_clock()); }
+		YS_INLINE ScopedRegion(char const* name, char const* file, int line) : _startTime(read_clock()), _name(name), _file(file), _line(line) {}
+		YS_INLINE ~ScopedRegion() { emit_region(_startTime, read_clock(), _name, _file, _line); }
 
 		ScopedRegion(ScopedRegion const&) = delete;
 		ScopedRegion& operator=(ScopedRegion const&) = delete;
 
-		ysRegionId _regionId;
-		ysLocationId _locationId;
 		ysTime _startTime;
+		char const* _name;
+		char const* _file;
+		int _line;
 	};
 
 } // namespace _ys_

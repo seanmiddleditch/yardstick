@@ -1,4 +1,21 @@
-/* Copyright (C) 2016 Sean Middleditch, all rights reserverd. */
+/* Yardstick
+ * Copyright (c) 2014-1016 Sean Middleditch
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
+ * associated documentation files (the "Software"), to deal in the Software without restriction,
+ * including without limitation the rights to use, copy, modify, merge, publish, distribute,
+ * sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all copies or
+ * substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT
+ * NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+ * NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+ * DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+ */
 
 // http://www.1024cores.net/home/lock-free-algorithms/queues/bounded-mpmc-queue
 
@@ -18,10 +35,10 @@ class ConcurrentQueue
 	static_assert(std::is_pod<T>::value, "ConcurrentQueue can only be used for PODs");
 	static_assert((kBufferSize & kBufferMask) == 0, "ConcurrentQueue size must be a power of 2");
 
-	AlignedAtomicU32 _sequence[kBufferSize];
+	AlignedAtomic<std::uint32_t> _sequence[kBufferSize];
+	AlignedAtomic<std::uint32_t> _enque;
+	AlignedAtomic<std::uint32_t> _deque;
 	T _buffer[kBufferSize];
-	AlignedAtomicU32 _enque = 0;
-	AlignedAtomicU32 _deque = 0;
 
 public:
 	inline ConcurrentQueue();
@@ -34,8 +51,10 @@ public:
 };
 
 template <typename T, std::size_t S>
-ConcurrentQueue<T, S>::ConcurrentQueue() 
+ConcurrentQueue<T, S>::ConcurrentQueue()
 {
+	_enque.store(0, std::memory_order_relaxed);
+	_deque.store(0, std::memory_order_relaxed);
 	for (std::uint32_t i = 0; i != kBufferSize; ++i)
 		_sequence[i].store(i, std::memory_order_relaxed);
 }
@@ -72,7 +91,7 @@ void ConcurrentQueue<T, S>::Enque(T const& value)
 template <typename T, std::size_t S>
 bool ConcurrentQueue<T, S>::TryDeque(T& out)
 {
-	std::uint32_t target = _enque.load(std::memory_order_relaxed);
+	std::uint32_t target = _deque.load(std::memory_order_relaxed);
 	std::uint32_t id = _sequence[target & kBufferMask].load(std::memory_order_acquire);
 	std::int32_t delta = id - (target + 1);
 

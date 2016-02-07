@@ -1,137 +1,135 @@
-/* Copyright (C) 2016 Sean Middleditch, all rights reserverd. */
+/* Yardstick
+ * Copyright (c) 2014-1016 Sean Middleditch
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
+ * associated documentation files (the "Software"), to deal in the Software without restriction,
+ * including without limitation the rights to use, copy, modify, merge, publish, distribute,
+ * sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all copies or
+ * substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT
+ * NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+ * NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+ * DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+ */
 
 #include "GlobalState.h"
 #include "Algorithm.h"
 #include "ThreadState.h"
+#include "Clock.h"
 
 using namespace _ys_;
 
-bool GlobalState::Initialize(ysAllocator alloc)
+ysResult GlobalState::Initialize(ysAllocator alloc)
 {
-	LockGuard guard(_globalStateLock);
+	if (_active.load(std::memory_order_acquire))
+		return ysResult::AlreadyInitialized;
 
-	// switch all internal allocations over to the new allocator
-	Allocator<void> allocator(alloc);
-	if (allocator != _allocator)
-	{
-		_allocator = allocator;
-		_locations = Vector<Location>(_locations.begin(), _locations.end(), _allocator);
-		_counters = Vector<char const*>(_counters.begin(), _counters.end(), _allocator);
-		_regions = Vector<char const*>(_regions.begin(), _regions.end(), _allocator);
+	if (alloc == nullptr)
+		return ysResult::InvalidParameter;
 
-		LockGuard guard2(_threadStateLock);
-		_threads = Vector<ThreadState*>(_threads.begin(), _threads.end(), _allocator);
-	}
+	LockGuard guard(_stateLock);
+	_allocator = alloc;
 
-	// activate the system if not already
+	// activate the system if not already.
+	// the active boolean must be set before the background thread starts to ensure that it
+	// doesn't early-exit.
 	_active.store(true, std::memory_order_seq_cst);
 	if (!_backgroundThread.joinable())
 		_backgroundThread = std::thread(std::bind(&GlobalState::ThreadMain, this));
-	return true;
+
+	return ysResult::Success;
 }
 
-void GlobalState::Shutdown()
+ysResult GlobalState::Shutdown()
 {
-	LockGuard guard(_globalStateLock);
+	LockGuard guard(_stateLock);
+
+	if (!_active.load(std::memory_order_acquire))
+		return ysResult::Uninitialized;
+
+	// do this first, so other systems know to stop trying to update things
+	_active.store(false, std::memory_order_release);
 
 	// wait for background thread to complete
-	_active.store(false, std::memory_order_seq_cst);
 	if (_backgroundThread.joinable())
 	{
-		_signal.Signal();
+		_signal.Post();
 		_backgroundThread.join();
 	}
 
-	_allocator = Allocator<void>();
-	_locations = Vector<Location>(_allocator);
-	_counters = Vector<char const*>(_allocator);
-	_regions = Vector<char const*>(_allocator);
+	_allocator = nullptr;
 
-	LockGuard guard2(_threadStateLock);
-	_threads = Vector<ThreadState*>(_allocator);
+	return ysResult::Success;
+}
+
+ysResult GlobalState::ListenWebsocket(unsigned short port)
+{
+	LockGuard guard(_stateLock);
+
+	if (!_active.load(std::memory_order_acquire))
+		return ysResult::Uninitialized;
+
+	return _websocketSink.Listen(port, _allocator);
 }
 
 void GlobalState::ThreadMain()
 {
-	while (_active.load(std::memory_order_relaxed))
+	while (_active.load(std::memory_order_seq_cst))
 	{
 		_signal.Wait(100);
 
-		LockGuard guard(_threadStateLock);
-		for (ThreadState* thread : _threads)
-			ProcessThread(thread);
+		FlushThreads();
+
+		_websocketSink.Flush();
+		_websocketSink.Update();
 	}
 }
 
-void GlobalState::ProcessThread(ThreadState* thread)
+ysResult GlobalState::ProcessThread(ThreadState* thread)
 {
-	char tmp[1024];
-	int const len = thread->Read(tmp, sizeof(tmp));
+	EventData ev;
+	int count = 512;
+	while (--count && thread->Deque(ev))
+		YS_TRY(WriteEvent(ev));
+	return ysResult::Success;
 }
 
-ysLocationId GlobalState::RegisterLocation(char const* file, int line, char const* function)
+ysResult GlobalState::FlushThreads()
 {
-	LockGuard guard(_globalStateLock);
-
-	Location const location{ file, function, line };
-
-	std::size_t const index = FindValue(_locations.data(), _locations.data() + _locations.size(), location);
-	auto const id = ysLocationId(index + 1);
-	if (index < _locations.size())
-		return id;
-
-	_locations.push_back(location);
-
-	return id;
+	LockGuard guard(_threadsLock);
+	for (ThreadState* thread = _threads; thread != nullptr; thread = thread->_next)
+		YS_TRY(ProcessThread(thread));
+	return ysResult::Success;
 }
 
-ysCounterId GlobalState::RegisterCounter(char const* name)
+ysResult GlobalState::WriteEvent(EventData const& ev)
 {
-	LockGuard guard(_globalStateLock);
-
-	// this may be a duplicate; return the existing one if so
-	std::size_t const index = FindIf(_counters.data(), _counters.data() + _counters.size(), [=](char const* str){ return std::strcmp(str, name) == 0; });
-	auto const id = ysCounterId(index + 1);
-	if (index < _counters.size())
-		return id;
-
-	_counters.push_back(name);
-
-	return id;
-}
-
-ysRegionId GlobalState::RegisterRegion(char const* name)
-{
-	LockGuard guard(_globalStateLock);
-
-	// this may be a duplicate; return the existing one if so
-	std::size_t const index = FindIf(_regions.data(), _regions.data() + _regions.size(), [=](char const* str){ return std::strcmp(str, name) == 0; });
-	auto const id = ysRegionId(index + 1);
-	if (index < _regions.size())
-		return id;
-
-	_regions.push_back(name);
-
-	return id;
+	return _websocketSink.WriteEvent(ev);
 }
 
 void GlobalState::RegisterThread(ThreadState* thread)
 {
-	LockGuard guard(_threadStateLock);
+	LockGuard guard(_threadsLock);
 
-	_threads.push_back(thread);
+	thread->_next = _threads;
+	if (_threads != nullptr)
+		_threads->_next = thread;
+	_threads = thread;
 }
 
 void GlobalState::DeregisterThread(ThreadState* thread)
 {
-	LockGuard guard(_threadStateLock);
+	LockGuard guard(_threadsLock);
 
-	std::size_t const index = FindValue(_threads.data(), _threads.data() + _threads.size(), thread);
-	if (index < _threads.size())
-		_threads.erase(_threads.begin() + index);
-}
-
-void GlobalState::PostThreadBuffer()
-{
-	_signal.Signal();
+	if (thread->_next != nullptr)
+		thread->_next->_prev = thread->_prev;
+	if (thread->_prev != nullptr)
+		thread->_prev->_next = thread->_next;
+	if (_threads == thread)
+		_threads = _threads->_next;
 }

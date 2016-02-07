@@ -1,59 +1,62 @@
 // Copyright (C) 2014-2016 Sean Middleditch, all rights reserverd.
 
-#include "Allocator.h"
 #include "GlobalState.h"
 #include "ThreadState.h"
 #include "Clock.h"
 
 using namespace _ys_;
 
+namespace
+{
+	ysResult EmitEvent(EventData const& ev)
+	{
+		ThreadState& thrd = ThreadState::thread_instance();
+		thrd.Enque(ev);
+		return ysResult::Success;
+	}
+}
+
 ysResult YS_API _ys_::initialize(ysAllocator allocator)
 {
-	GlobalState::instance().Initialize(allocator);
-	return ysResult::Success;
+	return GlobalState::instance().Initialize(allocator);
 }
 
 ysResult YS_API _ys_::shutdown()
 {
-	GlobalState::instance().Shutdown();
-	return ysResult::Success;
+	return GlobalState::instance().Shutdown();
 }
 
-YS_API ysLocationId YS_CALL _ys_::add_location(char const* fileName, int line, char const* functionName)
+YS_API ysResult YS_CALL _ys_::emit_record(ysTime when, double value, char const* name, char const* file, int line)
 {
-	return GlobalState::instance().RegisterLocation(fileName, line, functionName);
+	EventData ev;
+	ev.type = EventType::CounterSet;
+	ev.record.line = line;
+	ev.record.name = name;
+	ev.record.file = file;
+	ev.record.when = when;
+	ev.record.value = value;
+	return EmitEvent(ev);
 }
 
-YS_API ysCounterId YS_CALL _ys_::add_counter(const char* counterName)
+YS_API ysResult YS_CALL _ys_::emit_count(double amount, char const* name)
 {
-	return GlobalState::instance().RegisterCounter(counterName);
+	EventData ev;
+	ev.type = EventType::CounterAdd;
+	ev.counter_add.name = name;
+	ev.counter_add.amount = amount;
+	return EmitEvent(ev);
 }
 
-YS_API ysRegionId YS_CALL _ys_::add_region(const char* zoneName)
+YS_API ysResult YS_CALL _ys_::emit_region(ysTime startTime, ysTime endTime, char const* name, char const* file, int line)
 {
-	return GlobalState::instance().RegisterRegion(zoneName);
-}
-
-YS_API void YS_CALL _ys_::emit_counter_add(ysCounterId counterId, ysLocationId locationId, double amount)
-{
-	ysEvent ev;
-	ev.type = ysEvent::TypeCounter;
-	ev.counter.id = counterId;
-	ev.counter.loc = locationId;
-	ev.counter.when = ReadClock();
-	ev.counter.amount = amount;
-	emit_event(ev);
-}
-
-YS_API void YS_CALL _ys_::emit_region(ysRegionId regionId, ysLocationId locationId, ysTime startTime, ysTime endTime)
-{
-	ysEvent ev;
-	ev.type = ysEvent::TypeRegion;
-	ev.region.id = regionId;
-	ev.region.loc = locationId;
-	ev.region.begin = startTime;
-	ev.region.end = endTime;
-	emit_event(ev);
+	EventData ev;
+	ev.type = EventType::Region;
+	ev.counter_set.line = line;
+	ev.counter_set.name = name;
+	ev.counter_set.file = file;
+	ev.counter_set.begin = startTime;
+	ev.counter_set.end = endTime;
+	return EmitEvent(ev);
 }
 
 YS_API ysTime YS_CALL _ys_::read_clock()
@@ -61,10 +64,15 @@ YS_API ysTime YS_CALL _ys_::read_clock()
 	return ReadClock();
 }
 
-YS_API ysResult YS_CALL _ys_::emit_tick()
+YS_API ysResult YS_CALL _ys_::tick()
 {
-	ysEvent ev;
-	ev.type = ysEvent::TypeTick;
+	EventData ev;
+	ev.type = EventType::Tick;
 	ev.tick.when = ReadClock();
-	return emit_event(ev);
+	return EmitEvent(ev);
+}
+
+YS_API ysResult YS_CALL _ys_::listen_web(unsigned short port)
+{
+	return GlobalState::instance().ListenWebsocket(port);
 }

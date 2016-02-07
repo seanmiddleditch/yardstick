@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<title>Yardstick</title>
+		<link rel="stylesheet" type="text/css" href="css/ysView.css"/>
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/canvasjs/1.7.0/canvasjs.min.js" type="text/javascript"></script>
+		<script src="js/ysProtocol.js" type="text/javascript"></script>
+		<script src="js/ysState.js" type="text/javascript"></script>
+		<script src="js/ysView.js" type="text/javascript"></script>
+		<script type="text/javascript">
+			window.onload = function(){
+				var $ = function(i){ return document.getElementById(i); };
+				var ys = new YsState();
+				var ysView = new YsView(ys, {
+					stats: $('stats'),
+					graph: $('chart'),
+					legend: $('legend'),
+				});
+				var stats = {
+					events: $('stats-events'),
+					frames: $('stats-frames'),
+					bytes: $('stats-bytes')
+				};
+				ys.on('tick', function(ev){
+					stats.events.innerHTML = ys.stats.events;
+					stats.frames.innerHTML = ys.stats.frames;
+					stats.bytes.innerHTML = ys.stats.bytes;
+				});
+				var hostVal = $('host');
+				var connectBtn = $('connect');
+				var disconnectBtn = $('disconnect');
+				connectBtn.onclick = function(ev){
+					connectBtn.disabled = 'disabled';
+					hostVal.disabled = 'disabled';
+					ys.connect(hostVal.value);
+				};
+				disconnectBtn.onclick = function(ev){
+					disconnectBtn.disabled = 'disabled';
+					ys.disconnect();
+				};
+				ys.on('connected', function(){
+					connectBtn.disabled = 'disabled';
+					hostVal.disabled = 'disabled';
+					disconnectBtn.disabled = '';
+				});
+				ys.on('disconnected', function(){
+					stats.events.innerHTML = 0;
+					stats.frames.innerHTML = 0;
+					stats.bytes.innerHTML = 0;
+					connectBtn.disabled = '';
+					hostVal.disabled = '';
+					disconnectBtn.disabled = 'disabled';
+				});
+			}
+		</script>
+	</head>
+	<body>
+		<input id="host" value="localhost:5760" /> <button id="connect">Connect</button> <button id="disconnect" disabled="disabled">Disconnect</button>
+		<div id="chart"></div>
+		<div id="stats" class="grid">
+			<div><span>Events</span><span id="stats-events">0</span></div>
+			<div><span>Frames</span><span id="stats-frames">0</span></div>
+			<div><span>Bytes</span><span id="stats-bytes">0</span></div>
+		</div>
+	</body>
+</html>

@@ -1,24 +1,23 @@
 version: 1.0.{build}
 os: Visual Studio 2015
-configuration: RelWithDebInfo
-platform: x64
+configuration:
+- RelWithDebInfo
+- Debug
+platform:
+- x64
+- x86
 clone_folder: c:\yardstick
 before_build:
-- cmd: >-
-    cd c:\yardstick
-
-    cmake -G "Visual Studio 14 2015 Win64" -DCMAKE_INSTALL_PREFIX=%P%
+- cmd: cd c:\yardstick
+- cmd: if "%platform%"=="x86" cmake -G "Visual Studio 14 2015" -DCMAKE_INSTALL_PREFIX=c:\install .
+- cmd: if "%platform%"=="x64" cmake -G "Visual Studio 14 2015 Win64" -DCMAKE_INSTALL_PREFIX=c:\install .
 build:
   project: INSTALL.vcxproj
   parallel: true
   verbosity: minimal
 after_build:
-- cmd: >-
-    7z a yardstick.zip bin\* lib\* inc\*
-
-    nuget pack -symbols
+- cmd: cd c:\install
+- cmd: 7z a yardstick.zip bin lib inc
 artifacts:
 - path: yardstick.zip
   name: yardstick.zip
-- path: '*.nupkg'
-  name: nuget

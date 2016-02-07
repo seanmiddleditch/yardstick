@@ -19,8 +19,6 @@
 
 #pragma once
 
-#include "yardstick/yardstick.h"
-
 #if defined(_WIN32)
 
 #define WIN32_LEAN_AND_MEAN
@@ -28,43 +26,81 @@
 
 namespace _ys_ {
 
-static inline YS_INLINE ysTime ReadClock()
+class Signal
 {
-	LARGE_INTEGER tmp;
-	QueryPerformanceCounter(&tmp);
-	return tmp.QuadPart;
+	HANDLE _handle = nullptr;
+
+public:
+	inline Signal();
+	inline ~Signal();
+
+	Signal(Signal const&) = delete;
+	Signal& operator=(Signal const&) = delete;
+
+	inline void Wait(std::uint32_t microseconds);
+	inline void Post();
+};
+
+Signal::Signal()
+{
+	_handle = CreateEventW(nullptr, TRUE, FALSE, nullptr);
 }
 
-/// Default clock frequency reader.
-/// @internal
-static inline ysTime GetClockFrequency()
+Signal::~Signal()
 {
-	LARGE_INTEGER tmp;
-	QueryPerformanceFrequency(&tmp);
-	return tmp.QuadPart;
+	CloseHandle(_handle);
+}
+
+void Signal::Wait(std::uint32_t microseconds)
+{
+	WaitForSingleObject(_handle, static_cast<DWORD>(microseconds));
+}
+
+void Signal::Post()
+{
+	PulseEvent(_handle);
 }
 
 } // namespace _ys_
 
-#else // _WIN32
+#else // defined(_WIN32)
 
+#include <mutex>
+#include <condition_variable>
 #include <chrono>
 
 namespace _ys_ {
 
-static inline YS_INLINE ysTime ReadClock()
+class Signal
 {
-	auto const now = std::chrono::high_resolution_clock::now();
-	auto const time = now.time_since_epoch();
-	auto const ns = std::chrono::duration_cast<std::chrono::nanoseconds>(time);
-	return ns.count();
+	std::mutex _mutex;
+	std::condition_variable _cond;
+	std::atomic<int> _ready;
+
+public:
+  Signal() : _ready(0) {}
+	~Signal() = default;
+
+	Signal(Signal const&) = delete;
+	Signal& operator=(Signal const&) = delete;
+
+	inline void Wait(std::uint32_t microseconds);
+	inline void Post();
+};
+
+void Signal::Wait(std::uint32_t microseconds)
+{
+	std::unique_lock<std::mutex> guard(_mutex);
+	_cond.wait_for(guard, std::chrono::microseconds(microseconds), [this](){ return _ready.load(); });
+	_ready = false;
 }
 
-static inline ysTime GetClockFrequency()
+void Signal::Post()
 {
-	return std::nano::den;
+	_ready = 1;
+	_cond.notify_all();
 }
 
 } // namespace _ys_
 
-#endif
+#endif // defined(_WIN32)

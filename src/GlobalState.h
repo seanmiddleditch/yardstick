@@ -1,12 +1,30 @@
-/* Copyright (C) 2016 Sean Middleditch, all rights reserverd. */
+/* Yardstick
+ * Copyright (c) 2014-1016 Sean Middleditch
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
+ * associated documentation files (the "Software"), to deal in the Software without restriction,
+ * including without limitation the rights to use, copy, modify, merge, publish, distribute,
+ * sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all copies or
+ * substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT
+ * NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+ * NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+ * DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+ */
 
 #pragma once
 
+#include <yardstick/yardstick.h>
+
 #include "Atomics.h"
 #include "Spinlock.h"
-#include "Allocator.h"
-#include "Event.h"
-#include "ConcurrentCircularBuffer.h"
+#include "Signal.h"
+#include "WebsocketSink.h"
 
 #include <cstring>
 #include <thread>
@@ -17,54 +35,40 @@ class ThreadState;
 
 class GlobalState
 {
-	struct Location
-	{
-		char const* file;
-		char const* func;
-		int line;
-
-		bool operator==(Location const& rhs) const
-		{
-			return line == rhs.line &&
-				0 == std::strcmp(file, rhs.file) &&
-				0 == std::strcmp(func, rhs.func);
-		}
-	};
-
-	Event _signal;
-	Spinlock _globalStateLock;
+	Signal _signal;
 	AlignedAtomic<bool> _active;
-	std::thread _backgroundThread;
-	Allocator<void> _allocator;
-	Vector<Location> _locations;
-	Vector<char const*> _counters;
-	Vector<char const*> _regions;
 
-	Spinlock _threadStateLock;
-	Vector<ThreadState*> _threads;
+	Spinlock _stateLock;
+	std::thread _backgroundThread;
+	ysAllocator _allocator;
+
+	Spinlock _threadsLock;
+	ThreadState* _threads = nullptr;
+
+	WebsocketSink _websocketSink;
 
 	void ThreadMain();
-	void ProcessThread(ThreadState* thread);
-	void FlushNetBuffer();
+	ysResult ProcessThread(ThreadState* thread);
+	ysResult FlushThreads();
+	ysResult WriteEvent(EventData const& ev);
 
 public:
-	GlobalState() : _active(false), _locations(_allocator), _counters(_allocator), _regions(_allocator), _threads(_allocator) {}
+	GlobalState() : _active(false) {}
 	GlobalState(GlobalState const&) = delete;
 	GlobalState& operator=(GlobalState const&) = delete;
 
 	inline static GlobalState& instance();
 
-	bool Initialize(ysAllocator allocator);
-	void Shutdown();
+	ysResult Initialize(ysAllocator allocator);
+	bool IsActive() const { return _active.load(std::memory_order_relaxed); }
+	ysResult Shutdown();
 
-	ysLocationId RegisterLocation(char const* file, int line, char const* function);
-	ysCounterId RegisterCounter(char const* name);
-	ysRegionId RegisterRegion(char const* name);
+	ysResult ListenWebsocket(unsigned short port);
 
 	void RegisterThread(ThreadState* thread);
 	void DeregisterThread(ThreadState* thread);
 
-	void PostThreadBuffer();
+	void SignalPost() { _signal.Post(); }
 };
 
 GlobalState& GlobalState::instance()
