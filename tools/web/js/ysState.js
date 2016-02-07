@@ -180,7 +180,7 @@ class YsState {
 		this._counters = new YsStateCounters();
 		
 		protocol.on('connect', () => this.emit('connected'));
-		protocol.on('disconnect', () => { this._frames.endFrame(this._lastTick); this.emit('disconnected'); });
+		protocol.on('disconnect', (ev) => { this._frames.endFrame(this._lastTick); this.emit('disconnected', ev); });
 		protocol.on('error', (e) => this.emit('error', e));
 		protocol.on('event', (ev) => this.handleEvent(ev));
 	}
@@ -188,6 +188,8 @@ class YsState {
 	get counters() { return this._counters; }
 	get stats() { return this._protocol.stats; }
 	get frames() { return this._frames; }
+	
+	get connected() { return this._protocol.connected; }
 	
 	get frequency() { return this._tickFrequency; }
 	get period() { return this._tickPeriod; }

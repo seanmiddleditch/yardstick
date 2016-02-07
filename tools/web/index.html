@@ -28,34 +28,40 @@
 				});
 				var hostVal = $('host');
 				var connectBtn = $('connect');
-				var disconnectBtn = $('disconnect');
+				var errorTxt = $('error');
 				connectBtn.onclick = function(ev){
-					connectBtn.disabled = 'disabled';
-					hostVal.disabled = 'disabled';
-					ys.connect(hostVal.value);
-				};
-				disconnectBtn.onclick = function(ev){
-					disconnectBtn.disabled = 'disabled';
-					ys.disconnect();
+					if (ys.connected) {
+						ys.disconnect();
+					} else {
+						connectBtn.disabled = 'disabled';
+						connectBtn.innerHTML = 'Connecting...';
+						hostVal.disabled = 'disabled';
+						errorTxt.innerHTML = '';
+						ys.connect(hostVal.value);
+					}
 				};
 				ys.on('connected', function(){
-					connectBtn.disabled = 'disabled';
 					hostVal.disabled = 'disabled';
-					disconnectBtn.disabled = '';
+					connectBtn.disabled = '';
+					connectBtn.innerHTML = 'Disconnect';
+				});
+				ys.on('error', function(err){
+					errorTxt.innerHTML = 'Connection failed';
 				});
 				ys.on('disconnected', function(){
-					stats.events.innerHTML = 0;
-					stats.frames.innerHTML = 0;
-					stats.bytes.innerHTML = 0;
-					connectBtn.disabled = '';
 					hostVal.disabled = '';
-					disconnectBtn.disabled = 'disabled';
+					connectBtn.disabled = '';
+					connectBtn.innerHTML = 'Connect';
 				});
 			}
 		</script>
 	</head>
 	<body>
-		<input id="host" value="localhost:5760" /> <button id="connect">Connect</button> <button id="disconnect" disabled="disabled">Disconnect</button>
+		<div id="connection">
+			<input id="host" value="localhost:5760" />
+			<button id="connect">Connect</button>
+			<span id="error"></span>
+		</div>
 		<div id="chart"></div>
 		<div id="stats" class="grid">
 			<div><span>Events</span><span id="stats-events">0</span></div>

@@ -140,6 +140,7 @@ class YsProtocol {
 	}
 	
 	get stats() { return this._stats; }
+	get connected() { return this._ws != null; }
 		
 	on(ev, cb) {
 		var cbs = this._callbacks.get(ev);
@@ -162,7 +163,7 @@ class YsProtocol {
 		
 		ws.onopen = () => this.emit('connect');
 		ws.onerror = (err) => { this.emit('error', err); this._ws = null; };
-		ws.onclosed = () => { this.emit('disconnect'); this._ws = null; };
+		ws.onclose = (ev) => { this.emit('disconnect', ev); this._ws = null; };
 		ws.onmessage = (msg) => {
 			++this._stats.frames;
 			this._stats.bytes += msg.data.byteLength;

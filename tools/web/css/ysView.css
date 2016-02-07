@@ -1,3 +1,11 @@
+#connection {
+	padding: 4px;
+	background: #efefef;
+}
+#status {
+	font-weight: bold;
+}
+
 #stats {
 	position: fixed;
 	bottom: 0;
