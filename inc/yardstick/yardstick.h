@@ -115,10 +115,10 @@ enum class ysResult : std::uint8_t
 		::_ys_::ScopedRegion YS_CAT(_ys_region, __LINE__)(("" name), __FILE__, __LINE__)
 
 #	define ysCounterSet(name, value) \
-		(::_ys_::emit_record(::_ys_::read_clock(), (value), ("" name), __FILE__, __LINE__))
+		(::_ys_::emit_counter_set(::_ys_::read_clock(), (value), ("" name), __FILE__, __LINE__))
 
 #	define ysCounterAdd(name, amount) \
-		(::_ys_::emit_count((amount), ("" name)))
+		(::_ys_::emit_counter_add((amount), ("" name)))
 
 #else // !defined(NO_YS)
 
@@ -159,15 +159,19 @@ namespace _ys_
 
 	/// Emit a record.
 	/// @internal
-	YS_API ysResult YS_CALL emit_record(ysTime when, double value, char const* name, char const* file, int line);
+	YS_API ysResult YS_CALL emit_counter_set(ysTime when, double value, char const* name, char const* file, int line);
 
 	/// Emit a counter.
 	/// @internal
-	YS_API ysResult YS_CALL emit_count(double amount, char const* name);
+	YS_API ysResult YS_CALL emit_counter_add(double amount, char const* name);
 
-	/// Emit a region.
+	/// Emit an enter-region.
 	/// @internal
-	YS_API ysResult YS_CALL emit_region(ysTime startTime, ysTime endTime, char const* name, char const* file, int line);
+	YS_API ysResult YS_CALL emit_enter_region(ysTime when, char const* name, char const* file, int line);
+
+	/// Emit a leave_region.
+	/// @internal
+	YS_API ysResult YS_CALL emit_leave_region(ysTime when);
 
 	/// Read the current clock value.
 	/// @internal
@@ -177,16 +181,11 @@ namespace _ys_
 	/// @internal
 	struct ScopedRegion final
 	{
-		YS_INLINE ScopedRegion(char const* name, char const* file, int line) : _startTime(read_clock()), _name(name), _file(file), _line(line) {}
-		YS_INLINE ~ScopedRegion() { emit_region(_startTime, read_clock(), _name, _file, _line); }
+		YS_INLINE ScopedRegion(char const* name, char const* file, int line) { emit_enter_region(read_clock(), name, file, line); }
+		YS_INLINE ~ScopedRegion() { emit_leave_region(read_clock()); }
 
 		ScopedRegion(ScopedRegion const&) = delete;
 		ScopedRegion& operator=(ScopedRegion const&) = delete;
-
-		ysTime _startTime;
-		char const* _name;
-		char const* _file;
-		int _line;
 	};
 
 } // namespace _ys_

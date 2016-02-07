@@ -18,56 +18,6 @@
  */
 'use strict';
 
-class YsCounter {
-	constructor(id) {
-		this._id = id;
-		this._accum = 0;
-		this._data = [];
-	}
-	
-	get id() { return this._id; }
-	get data() { return this._data; }
-	[Symbol.iterator]() { return this._data; }
-	get length() { return this._data.length; }
-	
-	setValue(time, value) {
-		var i = this._data.length - 1;
-		while (i > 0 && this._data[i][0] > time)
-			--i;
-		this._data.splice(i + 1, 0, [time, value]);
-	}
-	
-	addAmount(amount) {
-		this._accum += amount;
-	}
-	
-	apply(time) {
-		if (this._accum != 0) {
-			this.setValue(time, this._accum);
-			this._accum = 0;
-		}
-	}
-	
-	findIndexByTime(time) {
-		var data = this._data;
-		var start = 0;
-		var count = data.length;
-		
-		while (count > 0) {
-			var step = (count / 2)|0;
-			var i = start + step;
-			if (data[i][0] < time) {
-				start = i + 1;
-				count -= step + 1;
-			} else {
-				count = step;
-			}
-		}
-		
-		return start;
-	}
-}
-
 class YsStateCounters {
 	constructor() {
 		this._counters = new Map();
@@ -100,21 +50,6 @@ class YsStateCounters {
 		for (var counter of this._counters)
 			counter[1].apply(time);
 	}
-};
-
-class YsFrame {
-	constructor(index, start) {
-		this._index = index;
-		this._start = start;
-		this._length = 0;
-	}
-	
-	get index() { return this._index; }
-	get start() { return this._start; }
-	get length() { return this._length; }
-	
-	get end() { return this._start + this._length; }
-	set end(val) { this._length = val - this._start; }
 };
 
 class YsFrameSet {
@@ -193,6 +128,7 @@ class YsState {
 	
 	get frequency() { return this._tickFrequency; }
 	get period() { return this._tickPeriod; }
+	get start() { return this._startTick; }
 	
 	get now() { return this._lastTick; }
 	

@@ -18,78 +18,84 @@
  */
 'use strict';
 
-window.YsCounterView = function(ysState, options){
-	var timeSpan = 4;
+class YsCounterView {
+	constructor(ysState, options) {
+		this._ys = ysState;
+		this._options = options;
 		
-	var frametimes = [];
-	var counters = {};
-	var start = 0;
-	var period = 0;
-	
-	var series = [{
-		type: 'stepArea',
-		dataPoints: frametimes,
-		name: 'Frametime',
-		showInLegend: true
-	}];
-	var axis = {
-		interlacedColor: '#EFEFEF',
-		valueFormatString: 'O',
-		labelFormatter: (e)=>((e.value - start) * period).toFixed(2) + 's'
-	};
-	var chart = new CanvasJS.Chart(options.graph, {
-		theme: 'theme2',
-		zoomEnabled: false,
-		animationEnabled: false,
-		axisX: axis,
-		legend: {
-			verticalAlign: 'top',
-			horizontalAlign: 'right',
-			fontSize: 12,
-            cursor: 'pointer',
-            itemclick: function(e){
-                if (typeof(e.dataSeries.visible) === "undefined" || e.dataSeries.visible)
-					e.dataSeries.visible = false;
-				else
-                    e.dataSeries.visible = true;
-				chart.render();
-            }
-		},
-		toolTip: {
-			content: (e)=>'['+((e.entries[0].dataPoint.x-start)*period).toFixed(2)+'s] '+e.entries[0].dataSeries.name+': '+e.entries[0].dataPoint.y
-		},
-		data: series
-	});
-	
-	ysState.on('header', function(ev){
-		axis.interval = ev.frequency;
-		period = 1 / ev.frequency;
-		start = ev.start;
-	});
-
-	ysState.on('tick', function(ev){
-		var startTime = ysState.now - ysState.frequency * timeSpan;
+		this._timeSpan = 4;
+		this._frametimes = [];
+		this._counters = {};
 		
-		frametimes.length = 0;
-		var startIndex = ysState.frames.findIndexByTime(startTime);
-		frametimes.push({x: startTime});
-		for (var i = startIndex; i != ysState.frames.length; ++i) {
-			var frame = ysState.frames.frame(i);
-			frametimes.push({x: frame.start, y: frame.length * ysState.period * 1000});
+		this._start = 0;
+		this._period = 0;
+		
+		this._series = [{
+			type: 'stepArea',
+			dataPoints: this._frametimes,
+			name: 'Frametime',
+			showInLegend: true
+		}];
+		this._axis = {
+			interlacedColor: '#EFEFEF',
+			valueFormatString: 'O',
+			labelFormatter: (e)=>((e.value - this._start) * this._period).toFixed(2) + 's'
+		};
+		this._chart = new CanvasJS.Chart(this._options.graph, {
+			theme: 'theme2',
+			zoomEnabled: false,
+			animationEnabled: false,
+			axisX: this._axis,
+			legend: {
+				verticalAlign: 'top',
+				horizontalAlign: 'right',
+				fontSize: 12,
+				cursor: 'pointer',
+				itemclick: function(e){
+					if (typeof(e.dataSeries.visible) === "undefined" || e.dataSeries.visible)
+						e.dataSeries.visible = false;
+					else
+						e.dataSeries.visible = true;
+					chart.render();
+				}
+			},
+			toolTip: {
+				content: (e)=>'['+((e.entries[0].dataPoint.x-start)*period).toFixed(2)+'s] '+e.entries[0].dataSeries.name+': '+e.entries[0].dataPoint.y
+			},
+			data: this._series
+		});
+			
+		var self = this;
+		ysState.on('header', function(ev){
+			self._axis.interval = ev.frequency;
+			self._period = 1 / ev.frequency;
+			self._start = ev.start;
+		});
+	}
+	
+	draw() {
+		var startTime = this._ys.now - this._ys.frequency * this._timeSpan;
+		
+ 		this._frametimes.length = 0;
+		var startIndex = this._ys.frames.findIndexByTime(startTime);
+		this._frametimes.push({x: startTime});
+		for (var i = startIndex; i < this._ys.frames.length; ++i) {
+			var frame = this._ys.frames.frame(i);
+			this._frametimes.push({x: frame.start, y: frame.length * this._ys.period * 1000});
 		}
 		
-		for (var counter of ysState.counters) {
+		/*for (var counter of this._ys.counters) {
 			var data;
-			if (counter.id in counters) {
-				data = counters[counter.id];
+			if (counter.id in this._counters) {
+				data = this._counters[counter.id];
 			} else {
 				data = [];
-				counters[counter.id] = data;
-				series.push({
+				this._counters[counter.id] = data;
+				this._series.push({
 					visible: false,
 					type: 'line',
 					dataPoints: data,
-					name: ysState.tostr(counter.id),
+					name: this._ys.tostr(counter.id),
 					showInLegend: true
 				});
 			}
@@ -99,8 +105,8 @@ window.YsCounterView = function(ysState, options){
 			data.push({x: startTime});
 			for (var i = startIndex; i != counter.data.length; ++i)
 				data.push({x: counter.data[i][0], y: counter.data[i][1]});
-		}
+		} */
 		
-		chart.render();
-	});
+		this._chart.render();
+	}
 };

@@ -70,17 +70,22 @@ class YsEventReader {
 				type: 'tick',
 				when: data.getUint64(pos + 1, true)
 			};
-		case 3 /*REGION*/:
-			this._pos += 29;
+		case 3 /*ENTER_REGION*/:
+			this._pos += 21;
 			return {
-				type: 'region',
+				type: 'enter_region',
 				line: data.getUint32(pos + 1, true),
 				name: data.getUint32(pos + 5, true),
 				file: data.getUint32(pos + 9, true),
-				start: data.getUint64(pos + 13, true),
-				end: data.getUint64(pos + 21, true)
+				when: data.getUint64(pos + 13, true),
 			};
-		case 4 /*COUNTER_SET*/:
+		case 4 /*LEAVE_REGION*/:
+			this._pos += 9;
+			return {
+				type: 'leave_region',
+				when: data.getUint64(pos + 1, true)
+			};
+		case 5 /*COUNTER_SET*/:
 			this._pos += 29;
 			return {
 				type: 'counter_set',
@@ -90,7 +95,14 @@ class YsEventReader {
 				when: data.getUint64(pos + 13, true),
 				value: data.getFloat64(pos + 21, true)
 			};
-		case 5 /*STRING*/:
+		case 6 /*COUNTER_ADD*/:
+			this._pos += 13;
+			return {
+				type: 'counter_add',
+				name: data.getUint32(pos + 1, true),
+				amount: data.getFloat64(pos + 5, true)
+			};
+		case 7 /*STRING*/:
 			var id = data.getUint32(pos + 1, true);
 			var len = data.getUint16(pos + 5, true);
 			// yup, pretty terrible
@@ -104,13 +116,6 @@ class YsEventReader {
 				id: id,
 				size: len,
 				string: str
-			};
-		case 6 /*COUNTER_ADD*/:
-			this._pos += 13;
-			return {
-				type: 'counter_add',
-				name: data.getUint32(pos + 1, true),
-				amount: data.getFloat64(pos + 5, true)
 			};
 		default /*NONE or Unknown*/:
 			this._error = 'protocol parse error: pos '+pos+' byte='+type;

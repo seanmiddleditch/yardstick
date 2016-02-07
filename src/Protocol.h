@@ -21,7 +21,7 @@
 
 namespace _ys_ {
 
-enum class EventType : std::uint8_t { None = 0, Header = 1, Tick = 2, Region = 3, CounterSet = 4, String = 5, CounterAdd = 6 };
+enum class EventType : std::uint8_t { None = 0, Header = 1, Tick = 2, EnterRegion = 3, LeaveRegion = 4, CounterSet = 5, CounterAdd = 6, String = 7 };
 
 struct EventData
 {
@@ -42,9 +42,12 @@ struct EventData
 			std::uint32_t line;
 			char const* name;
 			char const* file;
-			ysTime begin;
-			ysTime end;
-		} counter_set;
+			ysTime when;
+		} enter_region;
+		struct
+		{
+			ysTime when;
+		} leave_region;
 		struct
 		{
 			std::uint32_t line;
@@ -52,7 +55,7 @@ struct EventData
 			char const* file;
 			ysTime when;
 			double value;
-		} record;
+		} counter_set;
 		struct
 		{
 			ysStringHandle id;

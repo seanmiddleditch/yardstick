@@ -26,19 +26,19 @@ ysResult YS_API _ys_::shutdown()
 	return GlobalState::instance().Shutdown();
 }
 
-YS_API ysResult YS_CALL _ys_::emit_record(ysTime when, double value, char const* name, char const* file, int line)
+YS_API ysResult YS_CALL _ys_::emit_counter_set(ysTime when, double value, char const* name, char const* file, int line)
 {
 	EventData ev;
 	ev.type = EventType::CounterSet;
-	ev.record.line = line;
-	ev.record.name = name;
-	ev.record.file = file;
-	ev.record.when = when;
-	ev.record.value = value;
+	ev.counter_set.line = line;
+	ev.counter_set.name = name;
+	ev.counter_set.file = file;
+	ev.counter_set.when = when;
+	ev.counter_set.value = value;
 	return EmitEvent(ev);
 }
 
-YS_API ysResult YS_CALL _ys_::emit_count(double amount, char const* name)
+YS_API ysResult YS_CALL _ys_::emit_counter_add(double amount, char const* name)
 {
 	EventData ev;
 	ev.type = EventType::CounterAdd;
@@ -47,15 +47,22 @@ YS_API ysResult YS_CALL _ys_::emit_count(double amount, char const* name)
 	return EmitEvent(ev);
 }
 
-YS_API ysResult YS_CALL _ys_::emit_region(ysTime startTime, ysTime endTime, char const* name, char const* file, int line)
+YS_API ysResult YS_CALL _ys_::emit_enter_region(ysTime when, char const* name, char const* file, int line)
 {
 	EventData ev;
-	ev.type = EventType::Region;
-	ev.counter_set.line = line;
-	ev.counter_set.name = name;
-	ev.counter_set.file = file;
-	ev.counter_set.begin = startTime;
-	ev.counter_set.end = endTime;
+	ev.type = EventType::EnterRegion;
+	ev.enter_region.line = line;
+	ev.enter_region.name = name;
+	ev.enter_region.file = file;
+	ev.enter_region.when = when;
+	return EmitEvent(ev);
+}
+
+YS_API ysResult YS_CALL _ys_::emit_leave_region(ysTime when)
+{
+	EventData ev;
+	ev.type = EventType::LeaveRegion;
+	ev.leave_region.when = when;
 	return EmitEvent(ev);
 }
 

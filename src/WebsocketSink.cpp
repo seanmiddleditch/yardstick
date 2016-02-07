@@ -218,13 +218,13 @@ ysResult WebsocketSink::WriteSessionEvent(Session* session, EventData const& ev)
 	// flush any strings
 	switch (ev.type)
 	{
-	case EventType::Region:
-		YS_TRY(WriteSessionString(session, ev.counter_set.name));
-		YS_TRY(WriteSessionString(session, ev.counter_set.file));
+	case EventType::EnterRegion:
+		YS_TRY(WriteSessionString(session, ev.enter_region.name));
+		YS_TRY(WriteSessionString(session, ev.enter_region.file));
 		break;
 	case EventType::CounterSet:
-		YS_TRY(WriteSessionString(session, ev.record.name));
-		YS_TRY(WriteSessionString(session, ev.record.file));
+		YS_TRY(WriteSessionString(session, ev.counter_set.name));
+		YS_TRY(WriteSessionString(session, ev.counter_set.file));
 		break;
 	case EventType::String:
 		// #FIXME - what do we even do here?
