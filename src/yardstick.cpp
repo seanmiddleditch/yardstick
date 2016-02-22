@@ -16,12 +16,12 @@ namespace
 	}
 }
 
-ysResult YS_API _ys_::initialize(ysAllocator allocator)
+YS_API ysResult YS_CALL _ys_::initialize(ysAllocator allocator)
 {
 	return GlobalState::instance().Initialize(allocator);
 }
 
-ysResult YS_API _ys_::shutdown()
+YS_API ysResult YS_CALL _ys_::shutdown()
 {
 	return GlobalState::instance().Shutdown();
 }
