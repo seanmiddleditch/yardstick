@@ -39,7 +39,7 @@
 
 /// Configuration macros necessary for shared library exports.
 #if defined(_WIN32)
-#	define YS_CALL __cdecl
+#	define YS_CALL __fastcall
 #	define YS_INLINE __forceinline
 #	if defined(YARDSTICK_STATIC)
 #		define YS_API extern
