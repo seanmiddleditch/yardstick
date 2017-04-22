@@ -45,7 +45,7 @@ add_library(yardstick SHARED
 
 set_property(TARGET yardstick PROPERTY DEBUG_POSTFIX "d")
 set_property(TARGET yardstick PROPERTY CXX_STANDARD 11)
-target_compile_definitions(yardstick PRIVATE YARDSTICK_EXPORT _WINSOCK_DEPRECATED_NO_WARNINGS)
+target_compile_definitions(yardstick PRIVATE YARDSTICK_EXPORT _WINSOCK_DEPRECATED_NO_WARNINGS _CRT_SECURE_NO_WARNINGS)
 target_include_directories(yardstick PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 target_include_directories(yardstick PUBLIC ../inc)
 
